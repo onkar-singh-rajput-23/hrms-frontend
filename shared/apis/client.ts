@@ -1,7 +1,9 @@
 import axios from "axios";
 import { getClientRequestHeaders } from "@/client/interceptor/helper";
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+const REMOTE_API_URL = "https://hrms-backend-9q2z.onrender.com/api";
+
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || REMOTE_API_URL;
 
 export const api = axios.create({ baseURL: API_URL });
 
