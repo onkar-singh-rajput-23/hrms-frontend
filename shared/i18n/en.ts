@@ -303,7 +303,11 @@ export const en = {
   "auth.createAccount": "Create an account",
   "auth.haveAccount": "Already have an account?",
   "auth.logIn": "Log in",
-  "auth.demoTitle": "Demo accounts (password: Password123!)",
+  "auth.demoTitle": "Demo login credentials",
+  "auth.demoAdmin": "Admin:",
+  "auth.demoManagerOne": "Manager 1:",
+  "auth.demoManagerTwo": "Manager 2:",
+  "auth.demoEmployee": "Employee example:",
   "auth.demoStaff": "Employee logins: one per team member, e.g. monu@hurrys.local.",
 
   // ------------------------------------------------------------- registration

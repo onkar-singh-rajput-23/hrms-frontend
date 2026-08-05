@@ -85,8 +85,12 @@ export default function Login() {
 
           <div className="mt-4 rounded-2xl bg-slate-100/80 p-3.5 text-[12px] leading-relaxed text-slate-500">
             <p className="font-semibold text-slate-600">{t("auth.demoTitle")}</p>
-            <p className="mt-1 font-mono">admin@hurrys.local · gulab.sen@hurrys.local · dinesh@hurrys.local</p>
-            <p className="mt-1">{t("auth.demoStaff")}</p>
+            <div className="mt-2 space-y-1.5">
+              <p><span className="font-semibold text-slate-600">{t("auth.demoAdmin")}</span> <span className="font-mono">admin@hurrys.local · Password123!</span></p>
+              <p><span className="font-semibold text-slate-600">{t("auth.demoManagerOne")}</span> <span className="font-mono">gulab.sen@hurrys.local · Password123!</span></p>
+              <p><span className="font-semibold text-slate-600">{t("auth.demoManagerTwo")}</span> <span className="font-mono">dinesh@hurrys.local · Password123!</span></p>
+              <p><span className="font-semibold text-slate-600">{t("auth.demoEmployee")}</span> <span className="font-mono">monu@hurrys.local · Password123!</span></p>
+            </div>
           </div>
         </div>
       </div>

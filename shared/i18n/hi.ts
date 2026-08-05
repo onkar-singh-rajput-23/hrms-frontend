@@ -299,7 +299,11 @@ export const hi: Record<TranslationKey, string> = {
   "auth.createAccount": "खाता बनाएं",
   "auth.haveAccount": "पहले से खाता है?",
   "auth.logIn": "लॉग इन करें",
-  "auth.demoTitle": "डेमो खाते (पासवर्ड: Password123!)",
+  "auth.demoTitle": "डेमो लॉगिन जानकारी",
+  "auth.demoAdmin": "एडमिन:",
+  "auth.demoManagerOne": "मैनेजर 1:",
+  "auth.demoManagerTwo": "मैनेजर 2:",
+  "auth.demoEmployee": "कर्मचारी उदाहरण:",
   "auth.demoStaff": "कर्मचारी लॉगिन: हर टीम सदस्य के लिए एक, जैसे monu@hurrys.local।",
 
   // ------------------------------------------------------------- registration
