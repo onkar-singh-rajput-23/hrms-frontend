@@ -150,6 +150,12 @@ export const en = {
   "attendance.noRecords": "No attendance records yet.",
   "attendance.teamTitle": "Team attendance",
   "attendance.noTeamRecords": "No records yet.",
+  "attendance.teamMonthlyReport": "Select an employee to view their monthly attendance report.",
+  "attendance.selectMonth": "Select report month",
+  "attendance.backToTeam": "Back to team",
+  "attendance.selectEmployee": "Select an employee to view attendance.",
+  "attendance.employeeHistory": "{name}'s attendance",
+  "attendance.noRecordsForMonth": "No attendance records for this month.",
 
   // --------------------------------------------------------------------- leave
   "leave.title": "Leave",

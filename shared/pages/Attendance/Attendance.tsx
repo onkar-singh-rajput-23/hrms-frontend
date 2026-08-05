@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/shared/apis/client";
 import { useAppData } from "@/client/AppStore/AppDataContext";
@@ -7,7 +8,9 @@ import { useAuth } from "@/client/AppStore/AuthContext";
 import { useLocale } from "@/client/AppStore/LocaleContext";
 import { StatusBadge } from "@/shared/components/StatusBadge";
 import { formatMonthKey, formatTime } from "@/shared/helper/format";
+import type { TranslateFn } from "@/shared/i18n";
 import { Button } from "@/shared/lib/components/Button";
+import { Input } from "@/shared/lib/components/Field";
 import { Icon } from "@/shared/lib/components/Icon";
 import {
   Card,
@@ -18,7 +21,8 @@ import {
   SectionHeader,
   TableCard,
 } from "@/shared/lib/components/Surface";
-import type { AttendanceRecord } from "@/shared/types/hrms";
+import type { AttendanceRecord, Employee } from "@/shared/types/hrms";
+import type { Locale } from "@/shared/types/i18n";
 
 interface MonthlyStat {
   monthKey: string;
@@ -42,12 +46,27 @@ function summarizeByMonth(records: AttendanceRecord[] | undefined): MonthlyStat[
   return Array.from(byMonth.values()).sort((a, b) => (a.monthKey < b.monthKey ? 1 : -1));
 }
 
+function employeeIdFor(record: AttendanceRecord): string {
+  return typeof record.employee === "object" ? record.employee._id : record.employee;
+}
+
+function monthStat(records: AttendanceRecord[], monthKey: string): MonthlyStat {
+  return summarizeByMonth(records.filter((record) => record.date.startsWith(monthKey)))[0] ?? {
+    monthKey,
+    present: 0,
+    absent: 0,
+    leave: 0,
+  };
+}
+
 export default function Attendance() {
   const { user } = useAuth();
   const { isMobile } = useAppData();
   const { locale, t } = useLocale();
   const queryClient = useQueryClient();
   const canSeeTeam = user?.role === "manager" || user?.role === "admin";
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
+  const [selectedTeamMonth, setSelectedTeamMonth] = useState("");
 
   const myAttendance = useQuery({
     queryKey: ["attendance", "me"],
@@ -60,6 +79,37 @@ export default function Attendance() {
     queryFn: async () => (await api.get<AttendanceRecord[]>("/attendance/team")).data,
     enabled: canSeeTeam,
   });
+
+  const teamEmployees = useQuery({
+    queryKey: ["employees", "attendance-team"],
+    queryFn: async () => (await api.get<Employee[]>("/employees")).data,
+    enabled: canSeeTeam,
+  });
+
+  const selectedEmployeeAttendance = useQuery({
+    queryKey: ["attendance", "employee", selectedEmployeeId],
+    queryFn: async () =>
+      (await api.get<AttendanceRecord[]>(`/attendance/employee/${selectedEmployeeId}`)).data,
+    enabled: canSeeTeam && !!selectedEmployeeId,
+  });
+
+  const latestTeamMonth = useMemo(
+    () =>
+      (teamAttendance.data ?? [])
+        .map((record) => record.date.slice(0, 7))
+        .sort((a, b) => (a < b ? 1 : -1))[0] ?? new Date().toISOString().slice(0, 7),
+    [teamAttendance.data]
+  );
+
+  useEffect(() => {
+    if (!selectedTeamMonth && teamAttendance.data) setSelectedTeamMonth(latestTeamMonth);
+  }, [latestTeamMonth, selectedTeamMonth, teamAttendance.data]);
+
+  useEffect(() => {
+    if (!isMobile && !selectedEmployeeId && teamEmployees.data?.length) {
+      setSelectedEmployeeId(teamEmployees.data[0]._id);
+    }
+  }, [isMobile, selectedEmployeeId, teamEmployees.data]);
 
   const punchIn = useMutation({
     mutationFn: async () => (await api.post("/attendance/punch-in")).data,
@@ -255,65 +305,169 @@ export default function Attendance() {
 
       {canSeeTeam && (
         <section>
-          <SectionHeader title={t("attendance.teamTitle")} icon="users" />
+          <SectionHeader
+            title={t("attendance.teamTitle")}
+            subtitle={t("attendance.teamMonthlyReport")}
+            icon="users"
+            action={
+              <Input
+                type="month"
+                aria-label={t("attendance.selectMonth")}
+                value={selectedTeamMonth}
+                onChange={(event) => setSelectedTeamMonth(event.target.value)}
+                wrapperClassName="w-[9.5rem]"
+              />
+            }
+          />
 
-          {isMobile ? (
-            <div className="space-y-2.5">
-              {teamAttendance.data?.map((r) => (
-                <ListCard
-                  key={r._id}
-                  title={typeof r.employee === "object" ? r.employee.name : r.employee}
-                  subtitle={<span className="tabular-nums">{r.date}</span>}
-                  right={<StatusBadge status={r.status} />}
-                >
-                  <KeyValueGrid
-                    columns={1}
-                    items={[
-                      {
-                        label: t("common.hours"),
-                        value: <span className="tabular-nums">{r.hoursWorked ?? t("common.empty")}</span>,
-                      },
-                    ]}
-                  />
-                </ListCard>
-              ))}
-              {teamAttendance.data?.length === 0 && <EmptyState message={t("attendance.noTeamRecords")} icon="users" />}
+          {isMobile && selectedEmployeeId ? (
+            <div className="space-y-3">
+              <Button variant="secondary" size="sm" icon="chevronLeft" onClick={() => setSelectedEmployeeId(null)}>
+                {t("attendance.backToTeam")}
+              </Button>
+              <EmployeeAttendanceDetail
+                employee={teamEmployees.data?.find((employee) => employee._id === selectedEmployeeId)}
+                records={selectedEmployeeAttendance.data ?? []}
+                monthKey={selectedTeamMonth}
+                locale={locale}
+                t={t}
+                loading={selectedEmployeeAttendance.isLoading}
+              />
             </div>
           ) : (
-            <TableCard>
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-left text-slate-500">
-                  <tr>
-                    <th className="px-4 py-2.5 font-semibold">{t("common.employee")}</th>
-                    <th className="px-4 py-2.5 font-semibold">{t("common.date")}</th>
-                    <th className="px-4 py-2.5 font-semibold">{t("common.status")}</th>
-                    <th className="px-4 py-2.5 font-semibold">{t("common.hours")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {teamAttendance.data?.map((r) => (
-                    <tr key={r._id} className="border-t border-slate-100">
-                      <td className="px-4 py-2.5">{typeof r.employee === "object" ? r.employee.name : r.employee}</td>
-                      <td className="px-4 py-2.5 tabular-nums">{r.date}</td>
-                      <td className="px-4 py-2.5">
-                        <StatusBadge status={r.status} />
-                      </td>
-                      <td className="px-4 py-2.5 tabular-nums">{r.hoursWorked ?? t("common.empty")}</td>
-                    </tr>
-                  ))}
-                  {teamAttendance.data?.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="px-4 py-6 text-center text-slate-400">
-                        {t("attendance.noTeamRecords")}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </TableCard>
+            <div className={isMobile ? "space-y-2.5" : "grid items-start gap-4 lg:grid-cols-[22rem_minmax(0,1fr)]"}>
+              <div className="space-y-2.5">
+                {teamEmployees.data?.map((employee) => {
+                  const records = (teamAttendance.data ?? []).filter(
+                    (record) => employeeIdFor(record) === employee._id && record.date.startsWith(selectedTeamMonth)
+                  );
+                  const summary = monthStat(records, selectedTeamMonth);
+                  const selected = employee._id === selectedEmployeeId;
+                  return (
+                    <button
+                      type="button"
+                      key={employee._id}
+                      onClick={() => setSelectedEmployeeId(employee._id)}
+                      className={`tap w-full rounded-2xl border bg-white p-4 text-left shadow-sm transition-colors ${
+                        selected
+                          ? "border-brand-300 ring-2 ring-brand-100"
+                          : "border-slate-200/80 hover:border-brand-200"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-[15px] font-semibold text-slate-900">{employee.name}</p>
+                          <p className="mt-0.5 text-[12px] text-slate-500">
+                            {employee.employeeCode} · {employee.designation || t("common.empty")}
+                          </p>
+                        </div>
+                        <Icon name="chevronRight" size={18} className="mt-1 shrink-0 text-slate-400" />
+                      </div>
+                      <KeyValueGrid
+                        columns={3}
+                        items={[
+                          {
+                            label: t("attendance.present"),
+                            value: <span className="tabular-nums text-emerald-600">{summary.present}</span>,
+                          },
+                          {
+                            label: t("attendance.absent"),
+                            value: <span className="tabular-nums text-rose-600">{summary.absent}</span>,
+                          },
+                          {
+                            label: t("attendance.leaveTaken"),
+                            value: <span className="tabular-nums text-amber-600">{summary.leave}</span>,
+                          },
+                        ]}
+                      />
+                    </button>
+                  );
+                })}
+                {teamEmployees.data?.length === 0 && (
+                  <EmptyState message={t("attendance.noTeamRecords")} icon="users" />
+                )}
+              </div>
+
+              {!isMobile && (
+                <EmployeeAttendanceDetail
+                  employee={teamEmployees.data?.find((employee) => employee._id === selectedEmployeeId)}
+                  records={selectedEmployeeAttendance.data ?? []}
+                  monthKey={selectedTeamMonth}
+                  locale={locale}
+                  t={t}
+                  loading={selectedEmployeeAttendance.isLoading}
+                />
+              )}
+            </div>
           )}
         </section>
       )}
     </div>
+  );
+}
+
+function EmployeeAttendanceDetail({
+  employee,
+  records,
+  monthKey,
+  locale,
+  t,
+  loading,
+}: {
+  employee?: Employee;
+  records: AttendanceRecord[];
+  monthKey: string;
+  locale: Locale;
+  t: TranslateFn;
+  loading: boolean;
+}) {
+  if (!employee) return <EmptyState message={t("attendance.selectEmployee")} icon="users" />;
+
+  const monthRecords = records.filter((record) => record.date.startsWith(monthKey));
+  const summary = monthStat(monthRecords, monthKey);
+
+  return (
+    <Card>
+      <SectionHeader
+        title={t("attendance.employeeHistory", { name: employee.name })}
+        subtitle={`${employee.employeeCode} · ${formatMonthKey(monthKey, t)}`}
+        icon="calendar"
+      />
+      <div className="mb-4 rounded-xl bg-slate-50 p-3">
+        <KeyValueGrid
+          columns={3}
+          items={[
+            { label: t("attendance.present"), value: <span className="text-emerald-600">{summary.present}</span> },
+            { label: t("attendance.absent"), value: <span className="text-rose-600">{summary.absent}</span> },
+            { label: t("attendance.leaveTaken"), value: <span className="text-amber-600">{summary.leave}</span> },
+          ]}
+        />
+      </div>
+
+      {loading ? (
+        <p className="py-6 text-center text-sm text-slate-400">{t("common.loading")}</p>
+      ) : monthRecords.length === 0 ? (
+        <EmptyState message={t("attendance.noRecordsForMonth")} icon="calendar" />
+      ) : (
+        <div className="max-h-[32rem] space-y-2 overflow-y-auto pr-1">
+          {monthRecords.map((record) => (
+            <div key={record._id} className="rounded-xl border border-slate-100 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold tabular-nums text-slate-800">{record.date}</p>
+                <StatusBadge status={record.status} />
+              </div>
+              <KeyValueGrid
+                columns={3}
+                items={[
+                  { label: t("attendance.checkIn"), value: formatTime(record.checkIn, locale) },
+                  { label: t("attendance.checkOut"), value: formatTime(record.checkOut, locale) },
+                  { label: t("common.hours"), value: record.hoursWorked ?? t("common.empty") },
+                ]}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }

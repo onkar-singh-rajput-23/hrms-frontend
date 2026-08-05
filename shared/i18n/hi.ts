@@ -146,6 +146,12 @@ export const hi: Record<TranslationKey, string> = {
   "attendance.noRecords": "अभी कोई उपस्थिति रिकॉर्ड नहीं।",
   "attendance.teamTitle": "टीम की उपस्थिति",
   "attendance.noTeamRecords": "अभी कोई रिकॉर्ड नहीं।",
+  "attendance.teamMonthlyReport": "कर्मचारी की मासिक उपस्थिति रिपोर्ट देखने के लिए उसे चुनें।",
+  "attendance.selectMonth": "रिपोर्ट का महीना चुनें",
+  "attendance.backToTeam": "टीम सूची पर वापस जाएं",
+  "attendance.selectEmployee": "उपस्थिति देखने के लिए कर्मचारी चुनें।",
+  "attendance.employeeHistory": "{name} की उपस्थिति",
+  "attendance.noRecordsForMonth": "इस महीने का कोई उपस्थिति रिकॉर्ड नहीं है।",
 
   // --------------------------------------------------------------------- leave
   "leave.title": "अवकाश",
