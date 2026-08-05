@@ -4,16 +4,20 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth } from "@/client/AppStore/AuthContext";
+import { useLocale } from "@/client/AppStore/LocaleContext";
+import { LanguageSwitcher } from "@/shared/components/LanguageSwitcher";
+import { Icon, type IconName } from "@/shared/lib/components/Icon";
+import type { TranslationKey } from "@/shared/i18n";
 
-// Placeholder copy — swap this out for real product copy whenever it's ready.
-const FEATURES = [
-  { icon: "🕒", title: "Attendance", text: "Punch in and out, and see your history at a glance." },
-  { icon: "🌴", title: "Leave", text: "Apply for leave and track balances and approvals." },
-  { icon: "💰", title: "Payroll", text: "View payslips as soon as payroll is finalized." },
+const FEATURES: { icon: IconName; titleKey: TranslationKey; textKey: TranslationKey }[] = [
+  { icon: "clock", titleKey: "landing.featureAttendanceTitle", textKey: "landing.featureAttendanceText" },
+  { icon: "palm", titleKey: "landing.featureLeaveTitle", textKey: "landing.featureLeaveText" },
+  { icon: "wallet", titleKey: "landing.featurePayrollTitle", textKey: "landing.featurePayrollText" },
 ];
 
 export default function Landing() {
   const { user, loading } = useAuth();
+  const { t } = useLocale();
   const router = useRouter();
 
   useEffect(() => {
@@ -23,54 +27,59 @@ export default function Landing() {
   if (!loading && user) return null;
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="flex items-center justify-between px-6 py-5 sm:px-10">
-        <p className="text-lg font-semibold text-slate-800">HRMS</p>
-        <div className="flex items-center gap-3">
-          <Link href="/login" className="text-sm font-medium text-slate-600 hover:text-slate-900">
-            Log in
-          </Link>
+    <div className="min-h-dvh bg-slate-50">
+      <header className="safe-top flex items-center justify-between px-4 py-3.5 sm:px-8">
+        <p className="text-[17px] font-bold text-slate-900">{t("app.name")}</p>
+        <div className="flex items-center gap-2">
+          <LanguageSwitcher />
           <Link
-            href="/register"
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+            href="/login"
+            className="tap inline-flex min-h-10 items-center rounded-xl px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100"
           >
-            Register
+            {t("landing.logIn")}
           </Link>
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-6 py-16 text-center sm:py-24">
-        <h1 className="text-3xl font-semibold text-slate-900 sm:text-4xl">
-          One place for your team's HR, attendance, and payroll
+      <main className="mx-auto max-w-3xl px-5 pb-16 pt-8 text-center sm:pt-16">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1 text-[12px] font-semibold text-brand-700">
+          <Icon name="spark" size={13} />
+          {t("app.tagline")}
+        </span>
+        <h1 className="mt-4 text-[28px] font-bold leading-tight tracking-tight text-slate-900 sm:text-4xl">
+          {t("landing.heroTitle")}
         </h1>
-        <p className="mx-auto mt-4 max-w-xl text-base text-slate-500">
-          This is placeholder copy describing the app — attendance, leave, and payroll in one
-          simple system for the whole company. More detail will be added here soon.
+        <p className="mx-auto mt-3.5 max-w-xl text-[15px] leading-relaxed text-slate-500">
+          {t("landing.heroBody")}
         </p>
 
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+        <div className="mt-7 flex flex-col gap-2.5 sm:flex-row sm:justify-center">
           <Link
             href="/register"
-            className="rounded-lg bg-slate-900 px-6 py-3 text-sm font-medium text-white hover:bg-slate-800"
+            className="tap inline-flex min-h-13 items-center justify-center gap-2 rounded-xl bg-brand-600 px-6 text-[15px] font-semibold text-white shadow-sm shadow-brand-600/25 hover:bg-brand-700"
           >
-            Register
+            {t("landing.register")}
+            <Icon name="arrowRight" size={17} />
           </Link>
           <Link
             href="/login"
-            className="rounded-lg border border-slate-300 px-6 py-3 text-sm font-medium text-slate-700 hover:bg-white"
+            className="tap inline-flex min-h-13 items-center justify-center rounded-xl border border-slate-200 bg-white px-6 text-[15px] font-semibold text-slate-700 hover:bg-slate-50"
           >
-            Log in
+            {t("landing.logIn")}
           </Link>
         </div>
 
-        <div className="mt-16 grid gap-4 text-left sm:grid-cols-3">
-          {FEATURES.map((f) => (
-            <div key={f.title} className="rounded-xl border border-slate-200 bg-white p-4">
-              <span className="text-2xl" aria-hidden>
-                {f.icon}
+        <div className="mt-12 grid gap-3 text-left sm:grid-cols-3">
+          {FEATURES.map((feature) => (
+            <div
+              key={feature.titleKey}
+              className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm shadow-slate-200/50"
+            >
+              <span className="flex size-10 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
+                <Icon name={feature.icon} size={20} />
               </span>
-              <p className="mt-2 text-sm font-semibold text-slate-800">{f.title}</p>
-              <p className="mt-1 text-sm text-slate-500">{f.text}</p>
+              <p className="mt-3 text-[15px] font-semibold text-slate-900">{t(feature.titleKey)}</p>
+              <p className="mt-1 text-[13.5px] leading-relaxed text-slate-500">{t(feature.textKey)}</p>
             </div>
           ))}
         </div>

@@ -26,7 +26,9 @@ export interface SalaryRow {
   dupId?: boolean;
 }
 
-export const SALARY_MONTH = "February 2026";
+/** Kept as month + year rather than a fixed label so the period can be localised. */
+export const SALARY_MONTH_NUMBER = 2;
+export const SALARY_YEAR = 2026;
 export const DAYS_IN_MONTH = 28;
 
 export const SALARY_SHEET: SalaryRow[] = [
@@ -41,15 +43,13 @@ export const SALARY_SHEET: SalaryRow[] = [
   { id: "HP022", name: "Roshan", role: "Kitchen Helper", gross: 22000, advance: 0, penalty: 0, inHand: 22000, present: 3, absent: 0, off: 25, payable: 28, status: "Pending" },
 ];
 
-export const INR = (n: number): string => `₹${n.toLocaleString("en-IN")}`;
-
-export const initials = (name: string): string =>
-  name
-    .split(/\s+/)
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
+/** Translation keys for the sheet's own status vocabulary. */
+export const STATUS_KEY: Record<SalaryStatus, string> = {
+  Paid: "salaryStatus.paid",
+  Pending: "salaryStatus.pending",
+  Hold: "salaryStatus.hold",
+  "Cash Required": "salaryStatus.cashRequired",
+};
 
 /** Deterministic avatar hue so each person keeps a stable colour. */
 export const avatarColor = (seed: string): string => {

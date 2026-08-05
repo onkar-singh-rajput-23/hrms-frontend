@@ -4,10 +4,13 @@ import type { ReactNode } from "react";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/client/AppStore/AuthContext";
+import { useLocale } from "@/client/AppStore/LocaleContext";
+import { FullPageLoader } from "@/shared/lib/components/Spinner";
 import type { Role } from "@/shared/types/hrms";
 
 export function ProtectedRoute({ children, roles }: { children: ReactNode; roles?: Role[] }) {
   const { user, loading } = useAuth();
+  const { t } = useLocale();
   const router = useRouter();
   const authorized = !!user && (!roles || roles.includes(user.role) || user.role === "admin");
 
@@ -23,7 +26,7 @@ export function ProtectedRoute({ children, roles }: { children: ReactNode; roles
   }, [authorized, loading, router, user]);
 
   if (loading) {
-    return <div className="flex h-full items-center justify-center text-slate-500">Loading…</div>;
+    return <FullPageLoader label={t("common.loading")} />;
   }
   if (!user || !authorized) return null;
   return <>{children}</>;

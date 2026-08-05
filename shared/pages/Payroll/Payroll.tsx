@@ -3,24 +3,34 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/shared/apis/client";
+import { useAppData } from "@/client/AppStore/AppDataContext";
 import { useAuth } from "@/client/AppStore/AuthContext";
-import type { Payslip, PayrollRun } from "@/shared/types/hrms";
+import { useLocale } from "@/client/AppStore/LocaleContext";
 import { StatusBadge } from "@/shared/components/StatusBadge";
+import { formatRupees } from "@/shared/helper/format";
+import { monthOptions, translateMonth } from "@/shared/i18n";
+import { Button } from "@/shared/lib/components/Button";
+import { FormError, FormSuccess, Input, Select } from "@/shared/lib/components/Field";
+import {
+  Card,
+  EmptyState,
+  KeyValueGrid,
+  ListCard,
+  PageHeader,
+  SectionHeader,
+  TableCard,
+} from "@/shared/lib/components/Surface";
+import type { Payslip, PayrollRun } from "@/shared/types/hrms";
 import { SalarySheetDashboard } from "./components/SalarySheetDashboard";
-
-const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
 
 export default function Payroll() {
   const { user } = useAuth();
+  const { isMobile } = useAppData();
+  const { locale, t } = useLocale();
   const queryClient = useQueryClient();
   const isPayrollAdmin = user?.role === "admin";
+  const canViewTeam = user?.role === "manager" || user?.role === "admin";
   const canViewRuns = isPayrollAdmin;
-  // Admin / HR / Payroll see the whole salary sheet; everyone else sees only their own row.
-  const canViewAllStaff = isPayrollAdmin;
-
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
@@ -44,129 +54,264 @@ export default function Payroll() {
     enabled: !!user?.employee,
   });
 
+  const teamPayslips = useQuery({
+    queryKey: ["payroll", "payslips", "team"],
+    queryFn: async () => (await api.get<Payslip[]>("/payroll/payslips/team")).data,
+    enabled: canViewTeam,
+  });
+
   const runPayroll = useMutation({
     mutationFn: async () => (await api.post("/payroll/run", { month, year })).data,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["payroll", "runs"] }),
   });
 
-  return (
-    <div className="space-y-8">
-      <h1 className="text-xl font-semibold text-slate-800">Payroll</h1>
+  const selectedRunLabel = (() => {
+    const run = runs.data?.find((r) => r._id === selectedRun);
+    return run ? `${translateMonth(t, run.month)} ${run.year}` : "";
+  })();
 
-      <SalarySheetDashboard canViewAll={canViewAllStaff} employeeName={user?.employee?.name} />
+  function employeeName(payslip: Payslip): string {
+    return typeof payslip.employee === "object" ? payslip.employee.name : payslip.employee;
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageHeader title={t("payroll.title")} subtitle={t("payroll.subtitle")} />
+
+      {user?.employee && <SalarySheetDashboard canViewAll={false} employeeName={user.employee.name} />}
+
+      {canViewTeam && (
+        <section>
+          <SectionHeader title={t("payroll.teamPayslips")} icon="users" />
+          {isMobile ? (
+            <div className="space-y-2.5">
+              {teamPayslips.data?.map((p) => {
+                const run = typeof p.payrollRun === "object" ? p.payrollRun : null;
+                return (
+                  <ListCard
+                    key={p._id}
+                    title={employeeName(p)}
+                    subtitle={run ? `${translateMonth(t, run.month)} ${run.year}` : t("common.empty")}
+                    right={<span className="font-bold text-brand-700">{formatRupees(p.netPay, locale)}</span>}
+                  >
+                    <KeyValueGrid
+                      columns={2}
+                      items={[
+                        { label: t("payroll.gross"), value: formatRupees(p.grossPay, locale) },
+                        { label: t("payroll.deductions"), value: formatRupees(p.deductions, locale) },
+                      ]}
+                    />
+                  </ListCard>
+                );
+              })}
+              {teamPayslips.data?.length === 0 && <EmptyState message={t("payroll.noTeamPayslips")} icon="wallet" />}
+            </div>
+          ) : (
+            <TableCard>
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-left text-slate-500">
+                  <tr>
+                    <th className="px-4 py-2.5 font-semibold">{t("common.employee")}</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("common.period")}</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("payroll.gross")}</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("payroll.deductions")}</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("payroll.netPay")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {teamPayslips.data?.map((p) => {
+                    const run = typeof p.payrollRun === "object" ? p.payrollRun : null;
+                    return (
+                      <tr key={p._id} className="border-t border-slate-100">
+                        <td className="px-4 py-2.5">{employeeName(p)}</td>
+                        <td className="px-4 py-2.5">{run ? `${translateMonth(t, run.month)} ${run.year}` : t("common.empty")}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{formatRupees(p.grossPay, locale)}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{formatRupees(p.deductions, locale)}</td>
+                        <td className="px-4 py-2.5 font-semibold tabular-nums">{formatRupees(p.netPay, locale)}</td>
+                      </tr>
+                    );
+                  })}
+                  {teamPayslips.data?.length === 0 && (
+                    <tr><td colSpan={5} className="px-4 py-6 text-center text-slate-400">{t("payroll.noTeamPayslips")}</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </TableCard>
+          )}
+        </section>
+      )}
 
       {isPayrollAdmin && (
-        <section className="rounded-xl border border-slate-200 bg-white p-4">
-          <h2 className="text-base font-semibold text-slate-800">Run payroll</h2>
-          <div className="mt-4 flex flex-wrap items-end gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">Month</label>
-              <select
+        <section>
+          <SectionHeader title={t("payroll.run")} icon="wallet" />
+          <Card>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Select
+                label={t("common.month")}
                 value={month}
                 onChange={(e) => setMonth(Number(e.target.value))}
-                className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
               >
-                {MONTH_NAMES.map((m, idx) => (
-                  <option key={m} value={idx + 1}>
-                    {m}
+                {monthOptions(t).map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
                   </option>
                 ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-500">Year</label>
-              <input
+              </Select>
+              <Input
                 type="number"
+                label={t("common.year")}
                 value={year}
                 onChange={(e) => setYear(Number(e.target.value))}
-                className="w-24 rounded-lg border border-slate-300 px-3 py-2 text-sm"
               />
             </div>
-            <button
+            <Button
               onClick={() => runPayroll.mutate()}
               disabled={runPayroll.isPending}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+              icon="spark"
+              block={isMobile}
+              className="mt-3"
             >
-              {runPayroll.isPending ? "Running…" : "Run payroll"}
-            </button>
-          </div>
-          {runPayroll.isError && (
-            <p className="mt-2 text-sm text-rose-600">
-              {(runPayroll.error as any)?.response?.data?.message || "Could not run payroll for this period."}
-            </p>
-          )}
-          {runPayroll.isSuccess && <p className="mt-2 text-sm text-emerald-600">Payroll run completed and payslips generated.</p>}
+              {runPayroll.isPending ? t("payroll.running") : t("payroll.run")}
+            </Button>
+            {runPayroll.isError && (
+              <div className="mt-3">
+                <FormError
+                  message={(runPayroll.error as any)?.response?.data?.message || t("payroll.runError")}
+                />
+              </div>
+            )}
+            {runPayroll.isSuccess && (
+              <div className="mt-3">
+                <FormSuccess message={t("payroll.runSuccess")} />
+              </div>
+            )}
+          </Card>
         </section>
       )}
 
       {canViewRuns && (
         <section>
-          <h2 className="text-base font-semibold text-slate-800">Payroll runs</h2>
-          <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-left text-slate-500">
-                <tr>
-                  <th className="px-4 py-2">Period</th>
-                  <th className="px-4 py-2">Status</th>
-                  <th className="px-4 py-2"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {runs.data?.map((r) => (
-                  <tr key={r._id} className="border-t border-slate-100">
-                    <td className="px-4 py-2">
-                      {MONTH_NAMES[r.month - 1]} {r.year}
-                    </td>
-                    <td className="px-4 py-2">
-                      <StatusBadge status={r.status} />
-                    </td>
-                    <td className="px-4 py-2">
-                      <button
-                        onClick={() => setSelectedRun(r._id)}
-                        className="text-sm font-medium text-slate-700 underline"
-                      >
-                        View payslips
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {runs.data?.length === 0 && (
-                  <tr>
-                    <td colSpan={3} className="px-4 py-6 text-center text-slate-400">
-                      No payroll runs yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+          <SectionHeader title={t("payroll.runs")} icon="calendar" />
 
-          {selectedRun && (
-            <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
+          {isMobile ? (
+            <div className="space-y-2.5">
+              {runs.data?.map((r) => (
+                <ListCard
+                  key={r._id}
+                  title={`${translateMonth(t, r.month)} ${r.year}`}
+                  right={<StatusBadge status={r.status} />}
+                >
+                  <Button
+                    onClick={() => setSelectedRun(selectedRun === r._id ? null : r._id)}
+                    variant="secondary"
+                    size="sm"
+                    iconAfter={selectedRun === r._id ? "chevronDown" : "chevronRight"}
+                    block
+                  >
+                    {selectedRun === r._id ? t("payroll.hidePayslips") : t("payroll.viewPayslips")}
+                  </Button>
+                </ListCard>
+              ))}
+              {runs.data?.length === 0 && <EmptyState message={t("payroll.noRuns")} icon="wallet" />}
+            </div>
+          ) : (
+            <TableCard>
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-left text-slate-500">
                   <tr>
-                    <th className="px-4 py-2">Employee</th>
-                    <th className="px-4 py-2">Basic</th>
-                    <th className="px-4 py-2">LOP days</th>
-                    <th className="px-4 py-2">Gross</th>
-                    <th className="px-4 py-2">Deductions</th>
-                    <th className="px-4 py-2">Net pay</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("common.period")}</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("common.status")}</th>
+                    <th className="px-4 py-2.5" />
                   </tr>
                 </thead>
                 <tbody>
-                  {runPayslips.data?.map((p) => (
-                    <tr key={p._id} className="border-t border-slate-100">
-                      <td className="px-4 py-2">{typeof p.employee === "object" ? p.employee.name : p.employee}</td>
-                      <td className="px-4 py-2">₹{p.basicSalary.toLocaleString()}</td>
-                      <td className="px-4 py-2">{p.lopDays}</td>
-                      <td className="px-4 py-2">₹{p.grossPay.toLocaleString()}</td>
-                      <td className="px-4 py-2">₹{p.deductions.toLocaleString()}</td>
-                      <td className="px-4 py-2 font-medium">₹{p.netPay.toLocaleString()}</td>
+                  {runs.data?.map((r) => (
+                    <tr key={r._id} className="border-t border-slate-100">
+                      <td className="px-4 py-2.5">
+                        {translateMonth(t, r.month)} {r.year}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <StatusBadge status={r.status} />
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Button
+                          onClick={() => setSelectedRun(selectedRun === r._id ? null : r._id)}
+                          variant="secondary"
+                          size="sm"
+                        >
+                          {selectedRun === r._id ? t("payroll.hidePayslips") : t("payroll.viewPayslips")}
+                        </Button>
+                      </td>
                     </tr>
                   ))}
+                  {runs.data?.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="px-4 py-6 text-center text-slate-400">
+                        {t("payroll.noRuns")}
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
+            </TableCard>
+          )}
+
+          {selectedRun && (
+            <div className="mt-4">
+              <SectionHeader title={t("payroll.payslipsFor", { period: selectedRunLabel })} />
+              {isMobile ? (
+                <div className="space-y-2.5">
+                  {runPayslips.data?.map((p) => (
+                    <ListCard
+                      key={p._id}
+                      title={employeeName(p)}
+                      right={
+                        <span className="text-[15px] font-bold tabular-nums text-brand-700">
+                          {formatRupees(p.netPay, locale)}
+                        </span>
+                      }
+                    >
+                      <KeyValueGrid
+                        columns={2}
+                        items={[
+                          { label: t("payroll.basic"), value: formatRupees(p.basicSalary, locale) },
+                          { label: t("payroll.lopDays"), value: <span className="tabular-nums">{p.lopDays}</span> },
+                          { label: t("payroll.gross"), value: formatRupees(p.grossPay, locale) },
+                          { label: t("payroll.deductions"), value: formatRupees(p.deductions, locale) },
+                        ]}
+                      />
+                    </ListCard>
+                  ))}
+                  {runPayslips.data?.length === 0 && <EmptyState message={t("payroll.noPayslips")} icon="wallet" />}
+                </div>
+              ) : (
+                <TableCard>
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 text-left text-slate-500">
+                      <tr>
+                        <th className="px-4 py-2.5 font-semibold">{t("common.employee")}</th>
+                        <th className="px-4 py-2.5 font-semibold">{t("payroll.basic")}</th>
+                        <th className="px-4 py-2.5 font-semibold">{t("payroll.lopDays")}</th>
+                        <th className="px-4 py-2.5 font-semibold">{t("payroll.gross")}</th>
+                        <th className="px-4 py-2.5 font-semibold">{t("payroll.deductions")}</th>
+                        <th className="px-4 py-2.5 font-semibold">{t("payroll.netPay")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {runPayslips.data?.map((p) => (
+                        <tr key={p._id} className="border-t border-slate-100">
+                          <td className="px-4 py-2.5">{employeeName(p)}</td>
+                          <td className="px-4 py-2.5 tabular-nums">{formatRupees(p.basicSalary, locale)}</td>
+                          <td className="px-4 py-2.5 tabular-nums">{p.lopDays}</td>
+                          <td className="px-4 py-2.5 tabular-nums">{formatRupees(p.grossPay, locale)}</td>
+                          <td className="px-4 py-2.5 tabular-nums">{formatRupees(p.deductions, locale)}</td>
+                          <td className="px-4 py-2.5 font-semibold tabular-nums">{formatRupees(p.netPay, locale)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </TableCard>
+              )}
             </div>
           )}
         </section>
@@ -174,39 +319,70 @@ export default function Payroll() {
 
       {user?.employee && (
         <section>
-          <h2 className="text-base font-semibold text-slate-800">My payslips</h2>
-          <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-left text-slate-500">
-                <tr>
-                  <th className="px-4 py-2">Period</th>
-                  <th className="px-4 py-2">Gross</th>
-                  <th className="px-4 py-2">Deductions</th>
-                  <th className="px-4 py-2">Net pay</th>
-                </tr>
-              </thead>
-              <tbody>
-                {myPayslips.data?.map((p) => {
-                  const run = typeof p.payrollRun === "object" ? p.payrollRun : null;
-                  return (
-                    <tr key={p._id} className="border-t border-slate-100">
-                      <td className="px-4 py-2">{run ? `${MONTH_NAMES[run.month - 1]} ${run.year}` : "—"}</td>
-                      <td className="px-4 py-2">₹{p.grossPay.toLocaleString()}</td>
-                      <td className="px-4 py-2">₹{p.deductions.toLocaleString()}</td>
-                      <td className="px-4 py-2 font-medium">₹{p.netPay.toLocaleString()}</td>
-                    </tr>
-                  );
-                })}
-                {myPayslips.data?.length === 0 && (
+          <SectionHeader title={t("payroll.myPayslips")} icon="wallet" />
+
+          {isMobile ? (
+            <div className="space-y-2.5">
+              {myPayslips.data?.map((p) => {
+                const run = typeof p.payrollRun === "object" ? p.payrollRun : null;
+                return (
+                  <ListCard
+                    key={p._id}
+                    title={run ? `${translateMonth(t, run.month)} ${run.year}` : t("common.empty")}
+                    right={
+                      <span className="text-[15px] font-bold tabular-nums text-brand-700">
+                        {formatRupees(p.netPay, locale)}
+                      </span>
+                    }
+                  >
+                    <KeyValueGrid
+                      columns={2}
+                      items={[
+                        { label: t("payroll.gross"), value: formatRupees(p.grossPay, locale) },
+                        { label: t("payroll.deductions"), value: formatRupees(p.deductions, locale) },
+                      ]}
+                    />
+                  </ListCard>
+                );
+              })}
+              {myPayslips.data?.length === 0 && <EmptyState message={t("payroll.noPayslips")} icon="wallet" />}
+            </div>
+          ) : (
+            <TableCard>
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-left text-slate-500">
                   <tr>
-                    <td colSpan={4} className="px-4 py-6 text-center text-slate-400">
-                      No payslips yet.
-                    </td>
+                    <th className="px-4 py-2.5 font-semibold">{t("common.period")}</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("payroll.gross")}</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("payroll.deductions")}</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("payroll.netPay")}</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {myPayslips.data?.map((p) => {
+                    const run = typeof p.payrollRun === "object" ? p.payrollRun : null;
+                    return (
+                      <tr key={p._id} className="border-t border-slate-100">
+                        <td className="px-4 py-2.5">
+                          {run ? `${translateMonth(t, run.month)} ${run.year}` : t("common.empty")}
+                        </td>
+                        <td className="px-4 py-2.5 tabular-nums">{formatRupees(p.grossPay, locale)}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{formatRupees(p.deductions, locale)}</td>
+                        <td className="px-4 py-2.5 font-semibold tabular-nums">{formatRupees(p.netPay, locale)}</td>
+                      </tr>
+                    );
+                  })}
+                  {myPayslips.data?.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-6 text-center text-slate-400">
+                        {t("payroll.noPayslips")}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </TableCard>
+          )}
         </section>
       )}
     </div>

@@ -3,12 +3,27 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/shared/apis/client";
+import { useAppData } from "@/client/AppStore/AppDataContext";
 import { useAuth } from "@/client/AppStore/AuthContext";
-import type { LeaveBalance, LeaveRequest, LeaveType } from "@/shared/types/hrms";
+import { useLocale } from "@/client/AppStore/LocaleContext";
 import { StatusBadge } from "@/shared/components/StatusBadge";
+import { Button } from "@/shared/lib/components/Button";
+import { FormError, Input, Select } from "@/shared/lib/components/Field";
+import {
+  Card,
+  EmptyState,
+  KeyValueGrid,
+  ListCard,
+  PageHeader,
+  SectionHeader,
+  TableCard,
+} from "@/shared/lib/components/Surface";
+import type { LeaveBalance, LeaveRequest, LeaveType } from "@/shared/types/hrms";
 
 export default function Leave() {
   const { user } = useAuth();
+  const { isMobile } = useAppData();
+  const { t } = useLocale();
   const queryClient = useQueryClient();
   const canApprove = user?.role === "manager" || user?.role === "admin";
 
@@ -50,7 +65,7 @@ export default function Leave() {
       setEndDate("");
       setReason("");
     },
-    onError: (err: any) => setFormError(err?.response?.data?.message || "Could not submit request"),
+    onError: (err: any) => setFormError(err?.response?.data?.message || t("leave.couldNotSubmit")),
   });
 
   const approve = useMutation({
@@ -67,165 +82,241 @@ export default function Leave() {
     e.preventDefault();
     setFormError(null);
     if (!leaveTypeId || !startDate || !endDate) {
-      setFormError("Please fill in all required fields");
+      setFormError(t("leave.fillRequired"));
       return;
     }
     applyLeave.mutate();
   }
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-800">Leave</h1>
-        {user?.employee && (
-          <div className="mt-3 flex flex-wrap gap-3">
-            {balances.data?.map((b) => (
-              <div key={b._id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
-                <span className="font-medium text-slate-700">{b.leaveType.name}</span>{" "}
-                <span className="text-slate-500">
-                  {Math.max(b.allocated - b.used, 0)} of {b.allocated} days left
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+    <div className="space-y-6">
+      <PageHeader title={t("leave.title")} subtitle={t("leave.subtitle")} />
+
+      {/* Balances read as a swipeable rail on mobile instead of wrapping onto four lines. */}
+      {user?.employee && balances.data && balances.data.length > 0 && (
+        <div
+          className={
+            isMobile
+              ? "snap-rail no-scrollbar -mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1"
+              : "flex flex-wrap gap-2.5"
+          }
+        >
+          {balances.data.map((b) => (
+            <div
+              key={b._id}
+              className={`rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-sm ${
+                isMobile ? "min-w-[11rem] shrink-0" : ""
+              }`}
+            >
+              <p className="truncate text-[13px] font-semibold text-slate-800">{b.leaveType.name}</p>
+              <p className="mt-1 text-xl font-bold tabular-nums text-brand-700">
+                {Math.max(b.allocated - b.used, 0)}
+                <span className="ml-1 text-[12px] font-medium text-slate-400">/ {b.allocated}</span>
+              </p>
+              <p className="mt-0.5 text-[11.5px] text-slate-400">{t("common.days")}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {user?.employee && (
-        <section className="rounded-xl border border-slate-200 bg-white p-4">
-          <h2 className="text-base font-semibold text-slate-800">Apply for leave</h2>
-          <form onSubmit={onSubmit} className="mt-4 grid gap-3 sm:grid-cols-2">
-            <select
-              value={leaveTypeId}
-              onChange={(e) => setLeaveTypeId(e.target.value)}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            >
-              <option value="">Select leave type</option>
-              {leaveTypes.data?.map((t) => (
-                <option key={t._id} value={t._id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-            <input
-              type="text"
-              placeholder="Reason (optional)"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            />
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            />
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            />
-            {formError && <p className="text-sm text-rose-600 sm:col-span-2">{formError}</p>}
-            <button
-              type="submit"
-              disabled={applyLeave.isPending}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white sm:col-span-2 sm:w-40"
-            >
-              {applyLeave.isPending ? "Submitting…" : "Submit request"}
-            </button>
-          </form>
+        <section>
+          <SectionHeader title={t("leave.apply")} icon="palm" />
+          <Card>
+            <form onSubmit={onSubmit} className="grid gap-3 sm:grid-cols-2">
+              <Select
+                label={t("leave.leaveType")}
+                value={leaveTypeId}
+                onChange={(e) => setLeaveTypeId(e.target.value)}
+              >
+                <option value="">{t("leave.selectType")}</option>
+                {leaveTypes.data?.map((type) => (
+                  <option key={type._id} value={type._id}>
+                    {type.name}
+                  </option>
+                ))}
+              </Select>
+              <Input
+                type="text"
+                label={t("leave.reason")}
+                placeholder={t("leave.reasonPlaceholder")}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              />
+              <Input
+                type="date"
+                label={t("leave.startDate")}
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+              <Input
+                type="date"
+                label={t("leave.endDate")}
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+              {formError && (
+                <div className="sm:col-span-2">
+                  <FormError message={formError} />
+                </div>
+              )}
+              <div className="sm:col-span-2">
+                <Button type="submit" disabled={applyLeave.isPending} icon="check" block={isMobile}>
+                  {applyLeave.isPending ? t("common.submitting") : t("leave.submitRequest")}
+                </Button>
+              </div>
+            </form>
+          </Card>
         </section>
       )}
 
       {user?.employee && (
         <section>
-          <h2 className="text-base font-semibold text-slate-800">My requests</h2>
-          <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-left text-slate-500">
-                <tr>
-                  <th className="px-4 py-2">Type</th>
-                  <th className="px-4 py-2">Dates</th>
-                  <th className="px-4 py-2">Days</th>
-                  <th className="px-4 py-2">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {myRequests.data?.map((r) => (
-                  <tr key={r._id} className="border-t border-slate-100">
-                    <td className="px-4 py-2">{r.leaveType?.name}</td>
-                    <td className="px-4 py-2">
+          <SectionHeader title={t("leave.myRequests")} icon="clipboard" />
+
+          {isMobile ? (
+            <div className="space-y-2.5">
+              {myRequests.data?.map((r) => (
+                <ListCard
+                  key={r._id}
+                  title={r.leaveType?.name}
+                  subtitle={
+                    <span className="tabular-nums">
                       {r.startDate} → {r.endDate}
-                    </td>
-                    <td className="px-4 py-2">{r.days}</td>
-                    <td className="px-4 py-2">
-                      <StatusBadge status={r.status} />
-                    </td>
-                  </tr>
-                ))}
-                {myRequests.data?.length === 0 && (
+                    </span>
+                  }
+                  right={<StatusBadge status={r.status} />}
+                >
+                  <KeyValueGrid
+                    columns={2}
+                    items={[
+                      { label: t("common.days"), value: <span className="tabular-nums">{r.days}</span> },
+                      { label: t("leave.reason"), value: r.reason || t("common.empty") },
+                    ]}
+                  />
+                </ListCard>
+              ))}
+              {myRequests.data?.length === 0 && <EmptyState message={t("leave.noRequests")} icon="palm" />}
+            </div>
+          ) : (
+            <TableCard>
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-left text-slate-500">
                   <tr>
-                    <td colSpan={4} className="px-4 py-6 text-center text-slate-400">
-                      No leave requests yet.
-                    </td>
+                    <th className="px-4 py-2.5 font-semibold">{t("common.type")}</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("common.dates")}</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("common.days")}</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("common.status")}</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {myRequests.data?.map((r) => (
+                    <tr key={r._id} className="border-t border-slate-100">
+                      <td className="px-4 py-2.5">{r.leaveType?.name}</td>
+                      <td className="px-4 py-2.5 tabular-nums">
+                        {r.startDate} → {r.endDate}
+                      </td>
+                      <td className="px-4 py-2.5 tabular-nums">{r.days}</td>
+                      <td className="px-4 py-2.5">
+                        <StatusBadge status={r.status} />
+                      </td>
+                    </tr>
+                  ))}
+                  {myRequests.data?.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-6 text-center text-slate-400">
+                        {t("leave.noRequests")}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </TableCard>
+          )}
         </section>
       )}
 
       {canApprove && (
         <section>
-          <h2 className="text-base font-semibold text-slate-800">Pending approvals</h2>
-          <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-left text-slate-500">
-                <tr>
-                  <th className="px-4 py-2">Employee</th>
-                  <th className="px-4 py-2">Type</th>
-                  <th className="px-4 py-2">Dates</th>
-                  <th className="px-4 py-2">Days</th>
-                  <th className="px-4 py-2">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pendingRequests.data?.map((r) => (
-                  <tr key={r._id} className="border-t border-slate-100">
-                    <td className="px-4 py-2">{typeof r.employee === "object" ? r.employee.name : r.employee}</td>
-                    <td className="px-4 py-2">{r.leaveType?.name}</td>
-                    <td className="px-4 py-2">
-                      {r.startDate} → {r.endDate}
-                    </td>
-                    <td className="px-4 py-2">{r.days}</td>
-                    <td className="px-4 py-2 space-x-2">
-                      <button
-                        onClick={() => approve.mutate(r._id)}
-                        className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => reject.mutate(r._id)}
-                        className="rounded-md bg-rose-600 px-2.5 py-1 text-xs font-medium text-white"
-                      >
-                        Reject
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {pendingRequests.data?.length === 0 && (
+          <SectionHeader title={t("leave.pendingApprovals")} icon="shield" />
+
+          {isMobile ? (
+            <div className="space-y-2.5">
+              {pendingRequests.data?.map((r) => (
+                <ListCard
+                  key={r._id}
+                  title={typeof r.employee === "object" ? r.employee.name : r.employee}
+                  subtitle={r.leaveType?.name}
+                  right={<StatusBadge status={r.status} />}
+                >
+                  <KeyValueGrid
+                    columns={2}
+                    items={[
+                      {
+                        label: t("common.dates"),
+                        value: (
+                          <span className="tabular-nums">
+                            {r.startDate} → {r.endDate}
+                          </span>
+                        ),
+                      },
+                      { label: t("common.days"), value: <span className="tabular-nums">{r.days}</span> },
+                    ]}
+                  />
+                  <div className="mt-3 flex gap-2.5">
+                    <Button onClick={() => approve.mutate(r._id)} variant="success" icon="check" size="sm" block>
+                      {t("leave.approve")}
+                    </Button>
+                    <Button onClick={() => reject.mutate(r._id)} variant="danger" icon="x" size="sm" block>
+                      {t("leave.reject")}
+                    </Button>
+                  </div>
+                </ListCard>
+              ))}
+              {pendingRequests.data?.length === 0 && <EmptyState message={t("leave.noPending")} icon="check" />}
+            </div>
+          ) : (
+            <TableCard>
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-left text-slate-500">
                   <tr>
-                    <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
-                      No pending requests.
-                    </td>
+                    <th className="px-4 py-2.5 font-semibold">{t("common.employee")}</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("common.type")}</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("common.dates")}</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("common.days")}</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("common.actions")}</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {pendingRequests.data?.map((r) => (
+                    <tr key={r._id} className="border-t border-slate-100">
+                      <td className="px-4 py-2.5">{typeof r.employee === "object" ? r.employee.name : r.employee}</td>
+                      <td className="px-4 py-2.5">{r.leaveType?.name}</td>
+                      <td className="px-4 py-2.5 tabular-nums">
+                        {r.startDate} → {r.endDate}
+                      </td>
+                      <td className="px-4 py-2.5 tabular-nums">{r.days}</td>
+                      <td className="space-x-2 px-4 py-2.5">
+                        <Button onClick={() => approve.mutate(r._id)} variant="success" size="sm">
+                          {t("leave.approve")}
+                        </Button>
+                        <Button onClick={() => reject.mutate(r._id)} variant="danger" size="sm">
+                          {t("leave.reject")}
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                  {pendingRequests.data?.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
+                        {t("leave.noPending")}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </TableCard>
+          )}
         </section>
       )}
     </div>

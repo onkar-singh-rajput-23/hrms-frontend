@@ -3,14 +3,28 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/shared/apis/client";
 import { useAuth } from "@/client/AppStore/AuthContext";
+import { useLocale } from "@/client/AppStore/LocaleContext";
+import { formatRupees, formatTime, greetingKey } from "@/shared/helper/format";
+import { translateRole } from "@/shared/i18n";
+import { Button } from "@/shared/lib/components/Button";
+import { Icon } from "@/shared/lib/components/Icon";
+import {
+  Card,
+  EmptyState,
+  KeyValueGrid,
+  ListCard,
+  MetricTile,
+  SectionHeader,
+  TableCard,
+} from "@/shared/lib/components/Surface";
 import type { AppSurface } from "@/shared/types/app";
 import type { AttendanceRecord, Employee, LeaveBalance, LeaveRequest, Payslip } from "@/shared/types/hrms";
 import { StatusBadge } from "@/shared/components/StatusBadge";
-import { StatCard as Card } from "@/shared/components/StatCard";
 import { DailyTasksPanel } from "./DailyTasksPanel";
 
 export function DashboardView({ surface }: { surface: AppSurface }) {
   const { user } = useAuth();
+  const { locale, t } = useLocale();
   const role = user?.role;
   const queryClient = useQueryClient();
   const isMobile = surface === "mweb";
@@ -58,7 +72,7 @@ export function DashboardView({ surface }: { surface: AppSurface }) {
   const employees = useQuery({
     queryKey: ["employees"],
     queryFn: async () => (await api.get<Employee[]>("/employees")).data,
-    enabled: role === "admin",
+    enabled: role === "manager" || role === "admin",
   });
 
   const today = new Date().toISOString().slice(0, 10);
@@ -67,126 +81,197 @@ export function DashboardView({ surface }: { surface: AppSurface }) {
   const totalAllocated = (myBalances.data || []).reduce((sum, b) => sum + b.allocated, 0);
   const latestPayslip = myPayslips.data?.[0];
 
+  const todayStatus = todayRecord?.checkOut
+    ? t("dashboard.checkedOut")
+    : todayRecord?.checkIn
+      ? t("dashboard.checkedIn")
+      : t("dashboard.notPunched");
+
+  const punchSummary = todayRecord ? (
+    <span className="tabular-nums">
+      {todayRecord.checkIn && t("dashboard.inAt", { time: formatTime(todayRecord.checkIn, locale) })}
+      {todayRecord.checkOut && ` · ${t("dashboard.outAt", { time: formatTime(todayRecord.checkOut, locale) })}`}
+    </span>
+  ) : null;
+
   return (
-    <div className={isMobile ? "space-y-4" : "space-y-6"}>
+    <div className={isMobile ? "space-y-5" : "space-y-6"}>
       <div>
-        <h1 className={`${isMobile ? "text-lg" : "text-xl"} font-semibold text-slate-800`}>
-          Welcome back, {user?.name?.split(" ")[0]}
+        <p className="text-[13px] font-medium text-slate-500">{t(greetingKey())}</p>
+        <h1 className={`${isMobile ? "text-xl" : "text-2xl"} font-bold tracking-tight text-slate-900`}>
+          {t("dashboard.welcome", { name: user?.name?.split(" ")[0] ?? "" })}
         </h1>
-        <p className="text-sm text-slate-500 capitalize">{role?.replace("_", " ")} view</p>
+        {role && (
+          <p className="mt-0.5 text-sm text-slate-500">
+            {t("dashboard.roleView", { role: translateRole(t, role) })}
+          </p>
+        )}
       </div>
 
-      <div className={`grid gap-3 ${isMobile ? "grid-cols-1" : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"}`}>
+      {/* Punch card sits first on mobile: it is the one thing people open the app to do. */}
+      {user?.employee && (
+        <Card className="overflow-hidden border-brand-200 bg-gradient-to-br from-brand-700 via-brand-600 to-brand-500 text-white shadow-brand-600/25">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11.5px] font-semibold uppercase tracking-wide text-brand-100">
+                {t("dashboard.todayStatus")}
+              </p>
+              <p className="mt-1 text-2xl font-bold leading-tight">{todayStatus}</p>
+              {punchSummary && <p className="mt-1 text-[12.5px] text-brand-100">{punchSummary}</p>}
+            </div>
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-white/15 backdrop-blur">
+              <Icon name="clock" size={22} />
+            </span>
+          </div>
+
+          {/* Full-width pair on a phone; on desktop the row shouldn't stretch across the whole card. */}
+          <div className={`mt-4 flex gap-2.5 ${isMobile ? "" : "max-w-md"}`}>
+            <Button
+              onClick={() => punchIn.mutate()}
+              disabled={!!todayRecord?.checkIn || punchIn.isPending}
+              icon="check"
+              block
+              className="!bg-white !text-brand-700 shadow-none hover:!bg-brand-50"
+            >
+              {t("dashboard.punchIn")}
+            </Button>
+            <Button
+              onClick={() => punchOut.mutate()}
+              disabled={!todayRecord?.checkIn || !!todayRecord?.checkOut || punchOut.isPending}
+              icon="logout"
+              variant="onBrand"
+              block
+            >
+              {t("dashboard.punchOut")}
+            </Button>
+          </div>
+
+          {(punchIn.isError || punchOut.isError) && (
+            <p className="mt-3 rounded-xl bg-rose-950/25 px-3 py-2 text-[13px] text-rose-50">
+              {t("common.errorRetry")}
+            </p>
+          )}
+        </Card>
+      )}
+
+      <div className={`grid gap-3 ${isMobile ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"}`}>
         {user?.employee && (
           <>
-            <Card
-              title="Today"
-              value={todayRecord?.checkOut ? "Checked out" : todayRecord?.checkIn ? "Checked in" : "Not punched"}
-              hint={todayRecord?.checkIn ? new Date(todayRecord.checkIn).toLocaleTimeString() : undefined}
+            <MetricTile
+              label={t("dashboard.leaveBalance")}
+              value={t("common.daysCount", { count: Math.max(totalAllocated - totalUsed, 0) })}
+              hint={t("dashboard.leaveBalanceHint", { used: totalUsed, total: totalAllocated })}
+              icon="palm"
             />
-            <Card
-              title="Leave balance"
-              value={`${Math.max(totalAllocated - totalUsed, 0)} days`}
-              hint={`${totalUsed} used of ${totalAllocated}`}
-            />
-            <Card
-              title="Latest payslip"
-              value={latestPayslip ? `₹${latestPayslip.netPay.toLocaleString()}` : "—"}
-              hint={latestPayslip ? "Net pay" : "No payslip yet"}
+            <MetricTile
+              label={t("dashboard.latestPayslip")}
+              value={latestPayslip ? formatRupees(latestPayslip.netPay, locale) : t("common.empty")}
+              hint={latestPayslip ? t("dashboard.netPay") : t("dashboard.noPayslipYet")}
+              icon="wallet"
             />
           </>
         )}
         {(role === "manager" || role === "admin") && (
-          <Card title="Pending approvals" value={String(pendingApprovals.data?.length ?? 0)} hint="Leave requests" />
+          <MetricTile
+            label={t("dashboard.pendingApprovals")}
+            value={String(pendingApprovals.data?.length ?? 0)}
+            hint={t("dashboard.leaveRequests")}
+            icon="clipboard"
+          />
         )}
         {role === "admin" && (
-          <Card title="Active employees" value={String(employees.data?.filter((e) => e.status === "active").length ?? 0)} />
+          <MetricTile
+            label={t("dashboard.activeEmployees")}
+            value={String(employees.data?.filter((e) => e.status === "active").length ?? 0)}
+            icon="users"
+          />
         )}
       </div>
-
-      {user?.employee && (
-        <section className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-base font-semibold text-slate-800">Mark attendance</h2>
-              {todayRecord && (
-                <p className="mt-1 text-sm text-slate-500">
-                  {todayRecord.checkIn && `In: ${new Date(todayRecord.checkIn).toLocaleTimeString()}`}
-                  {todayRecord.checkOut && ` · Out: ${new Date(todayRecord.checkOut).toLocaleTimeString()}`}
-                </p>
-              )}
-            </div>
-            <div className={`flex gap-3 ${isMobile ? "w-full" : ""}`}>
-              <button
-                onClick={() => punchIn.mutate()}
-                disabled={!!todayRecord?.checkIn || punchIn.isPending}
-                className="min-w-0 flex-1 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
-              >
-                Punch in
-              </button>
-              <button
-                onClick={() => punchOut.mutate()}
-                disabled={!todayRecord?.checkIn || !!todayRecord?.checkOut || punchOut.isPending}
-                className="min-w-0 flex-1 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
-              >
-                Punch out
-              </button>
-            </div>
-          </div>
-          {(punchIn.isError || punchOut.isError) && (
-            <p className="mt-2 text-sm text-rose-600">Something went wrong. Please try again.</p>
-          )}
-        </section>
-      )}
 
       {user && <DailyTasksPanel role={role} employee={user.employee} employees={employees.data || []} />}
 
       {user?.employee && (
         <section>
-          <h2 className="text-base font-semibold text-slate-800">Leave report</h2>
-          <div className="mt-3 flex flex-wrap gap-3">
-            {myBalances.data?.map((b) => (
-              <div key={b._id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
-                <span className="font-medium text-slate-700">{b.leaveType.name}</span>{" "}
-                <span className="text-slate-500">
-                  {Math.max(b.allocated - b.used, 0)} of {b.allocated} days left
-                </span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-left text-slate-500">
-                <tr>
-                  <th className="px-4 py-2">Type</th>
-                  <th className="px-4 py-2">Dates</th>
-                  <th className="px-4 py-2">Days</th>
-                  <th className="px-4 py-2">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {myRequests.data?.slice(0, 10).map((r) => (
-                  <tr key={r._id} className="border-t border-slate-100">
-                    <td className="px-4 py-2">{r.leaveType?.name}</td>
-                    <td className="px-4 py-2">
+          <SectionHeader title={t("dashboard.leaveReport")} icon="palm" />
+
+          {myBalances.data && myBalances.data.length > 0 && (
+            <div
+              className={`mb-3 ${
+                isMobile ? "snap-rail no-scrollbar -mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1" : "flex flex-wrap gap-2.5"
+              }`}
+            >
+              {myBalances.data.map((b) => (
+                <div
+                  key={b._id}
+                  className={`rounded-xl border border-slate-200/80 bg-white px-3.5 py-2.5 shadow-sm ${
+                    isMobile ? "min-w-[10.5rem] shrink-0" : ""
+                  }`}
+                >
+                  <p className="truncate text-[13px] font-semibold text-slate-800">{b.leaveType.name}</p>
+                  <p className="mt-0.5 text-[12px] tabular-nums text-slate-500">
+                    {t("leave.daysLeft", { left: Math.max(b.allocated - b.used, 0), total: b.allocated })}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {isMobile ? (
+            <div className="space-y-2.5">
+              {myRequests.data?.slice(0, 10).map((r) => (
+                <ListCard
+                  key={r._id}
+                  title={r.leaveType?.name}
+                  subtitle={
+                    <span className="tabular-nums">
                       {r.startDate} → {r.endDate}
-                    </td>
-                    <td className="px-4 py-2">{r.days}</td>
-                    <td className="px-4 py-2">
-                      <StatusBadge status={r.status} />
-                    </td>
-                  </tr>
-                ))}
-                {myRequests.data?.length === 0 && (
+                    </span>
+                  }
+                  right={<StatusBadge status={r.status} />}
+                >
+                  <KeyValueGrid
+                    columns={1}
+                    items={[{ label: t("common.days"), value: <span className="tabular-nums">{r.days}</span> }]}
+                  />
+                </ListCard>
+              ))}
+              {myRequests.data?.length === 0 && <EmptyState message={t("dashboard.noLeaveRequests")} icon="palm" />}
+            </div>
+          ) : (
+            <TableCard>
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-left text-slate-500">
                   <tr>
-                    <td colSpan={4} className="px-4 py-6 text-center text-slate-400">
-                      No leave requests yet.
-                    </td>
+                    <th className="px-4 py-2.5 font-semibold">{t("common.type")}</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("common.dates")}</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("common.days")}</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("common.status")}</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {myRequests.data?.slice(0, 10).map((r) => (
+                    <tr key={r._id} className="border-t border-slate-100">
+                      <td className="px-4 py-2.5">{r.leaveType?.name}</td>
+                      <td className="px-4 py-2.5 tabular-nums">
+                        {r.startDate} → {r.endDate}
+                      </td>
+                      <td className="px-4 py-2.5 tabular-nums">{r.days}</td>
+                      <td className="px-4 py-2.5">
+                        <StatusBadge status={r.status} />
+                      </td>
+                    </tr>
+                  ))}
+                  {myRequests.data?.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-6 text-center text-slate-400">
+                        {t("dashboard.noLeaveRequests")}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </TableCard>
+          )}
         </section>
       )}
     </div>

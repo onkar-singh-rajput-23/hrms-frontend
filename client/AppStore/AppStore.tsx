@@ -3,10 +3,20 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import type { AppData } from "@/shared/types/app";
+import type { Locale } from "@/shared/types/i18n";
 import { AppDataProvider } from "./AppDataContext";
 import { AuthProvider } from "./AuthContext";
+import { LocaleProvider } from "./LocaleContext";
 
-export function AppStore({ appData, children }: { appData: AppData; children: ReactNode }) {
+export function AppStore({
+  appData,
+  locale,
+  children,
+}: {
+  appData: AppData;
+  locale: Locale;
+  children: ReactNode;
+}) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -21,9 +31,11 @@ export function AppStore({ appData, children }: { appData: AppData; children: Re
 
   return (
     <AppDataProvider appData={appData}>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>{children}</AuthProvider>
-      </QueryClientProvider>
+      <LocaleProvider initialLocale={locale}>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>{children}</AuthProvider>
+        </QueryClientProvider>
+      </LocaleProvider>
     </AppDataProvider>
   );
 }

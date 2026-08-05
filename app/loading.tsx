@@ -1,3 +1,9 @@
+"use client";
+
+import { useLocale } from "@/client/AppStore/LocaleContext";
+import { FullPageLoader } from "@/shared/lib/components/Spinner";
+
 export default function Loading() {
-  return <div className="flex min-h-screen items-center justify-center text-slate-500">Loading...</div>;
+  const { t } = useLocale();
+  return <FullPageLoader label={t("common.loading")} />;
 }

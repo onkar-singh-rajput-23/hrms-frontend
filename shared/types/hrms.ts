@@ -1,10 +1,11 @@
-export type Role = "manager" | "admin";
+export type Role = "employee" | "manager" | "admin";
 
-// Public registration creates a manager. Admin access is granted by an existing admin.
-export const PUBLIC_ROLES: { value: Role; label: string }[] = [{ value: "manager", label: "Manager" }];
+// Public registration creates an employee. Managers and admins are assigned by an admin.
+export const PUBLIC_ROLES: { value: Role; label: string }[] = [{ value: "employee", label: "Employee" }];
 
 export const ALL_ROLES: { value: Role; label: string }[] = [
   ...PUBLIC_ROLES,
+  { value: "manager", label: "Manager" },
   { value: "admin", label: "Admin" },
 ];
 
@@ -82,7 +83,7 @@ export interface DailyTask {
   date: string;
   title: string;
   description?: string;
-  status: "todo" | "in_progress" | "done";
+  status: "todo" | "in_progress" | "done" | "pending_approval" | "approved";
   createdAt: string;
   updatedAt: string;
 }

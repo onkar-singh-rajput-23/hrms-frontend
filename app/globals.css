@@ -1,5 +1,25 @@
 @import "tailwindcss";
 
+/* Brand ramp derived from the PWA theme colour (#863bff). Use `bg-brand-600`, `text-brand-700`, … */
+@theme {
+  --color-brand-50: #f5f0ff;
+  --color-brand-100: #ece2ff;
+  --color-brand-200: #dbc9ff;
+  --color-brand-300: #c3a3ff;
+  --color-brand-400: #a674ff;
+  --color-brand-500: #863bff;
+  --color-brand-600: #7423f0;
+  --color-brand-700: #6218cc;
+  --color-brand-800: #5217a6;
+  --color-brand-900: #451785;
+  --color-brand-950: #2a0b57;
+
+  --animate-fade-in: fade-in 0.18s ease-out;
+  --animate-sheet-in: sheet-in 0.26s cubic-bezier(0.32, 0.72, 0, 1);
+  --animate-dialog-in: dialog-in 0.18s ease-out;
+  --animate-rise-in: rise-in 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
 :root {
   color-scheme: light;
 }
@@ -14,7 +34,14 @@ body,
 body {
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: contain;
-  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  background-color: var(--color-slate-50);
+  color: var(--color-slate-800);
+  font-family: system-ui, "Segoe UI", Roboto, "Noto Sans Devanagari", sans-serif;
+}
+
+/* Devanagari needs a little more line height than Latin to stay legible at small sizes. */
+:lang(hi) body {
+  line-height: 1.65;
 }
 
 /* Keep bottom nav clear of iOS home indicator / Android nav bar when wrapped in Capacitor */
@@ -23,4 +50,101 @@ body {
 }
 .safe-top {
   padding-top: env(safe-area-inset-top, 0px);
+}
+/* Extra scroll room so the fixed bottom nav never covers the last card. */
+.pb-nav {
+  padding-bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Horizontal card rails snap cleanly under a thumb. Rails bleed to the screen edge with
+   `-mx-4 px-4`, so the snapport needs matching scroll padding or snapping hides the left inset. */
+.snap-rail {
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 1rem;
+}
+.snap-rail > * {
+  scroll-snap-align: start;
+}
+
+/* iOS zooms the page when a focused field is under 16px, so never go below it on touch UI. */
+input,
+select,
+textarea,
+button {
+  font-family: inherit;
+}
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 1rem;
+  }
+}
+
+/* Give every tappable control a visible press state instead of the removed tap highlight. */
+.tap {
+  transition: transform 0.12s ease, opacity 0.12s ease, background-color 0.15s ease;
+}
+.tap:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+  .tap:active:not(:disabled) {
+    transform: none;
+  }
 }

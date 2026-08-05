@@ -1,26 +1,34 @@
+"use client";
+
+import { useLocale } from "@/client/AppStore/LocaleContext";
+import { translateStatus } from "@/shared/i18n";
+
 const styles: Record<string, string> = {
-  present: "bg-emerald-100 text-emerald-700",
-  on_leave: "bg-amber-100 text-amber-700",
-  absent: "bg-rose-100 text-rose-700",
-  half_day: "bg-sky-100 text-sky-700",
-  pending: "bg-amber-100 text-amber-700",
-  approved: "bg-emerald-100 text-emerald-700",
-  rejected: "bg-rose-100 text-rose-700",
-  cancelled: "bg-slate-100 text-slate-600",
-  draft: "bg-amber-100 text-amber-700",
-  finalized: "bg-emerald-100 text-emerald-700",
-  active: "bg-emerald-100 text-emerald-700",
-  exited: "bg-slate-100 text-slate-600",
-  todo: "bg-slate-100 text-slate-600",
-  in_progress: "bg-sky-100 text-sky-700",
-  done: "bg-emerald-100 text-emerald-700",
+  present: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  on_leave: "bg-amber-50 text-amber-700 ring-amber-200",
+  absent: "bg-rose-50 text-rose-700 ring-rose-200",
+  half_day: "bg-sky-50 text-sky-700 ring-sky-200",
+  pending: "bg-amber-50 text-amber-700 ring-amber-200",
+  approved: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  rejected: "bg-rose-50 text-rose-700 ring-rose-200",
+  cancelled: "bg-slate-50 text-slate-600 ring-slate-200",
+  draft: "bg-amber-50 text-amber-700 ring-amber-200",
+  finalized: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  active: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  exited: "bg-slate-50 text-slate-600 ring-slate-200",
+  todo: "bg-slate-50 text-slate-600 ring-slate-200",
+  in_progress: "bg-sky-50 text-sky-700 ring-sky-200",
+  done: "bg-emerald-50 text-emerald-700 ring-emerald-200",
 };
 
 export function StatusBadge({ status }: { status: string }) {
-  const cls = styles[status] || "bg-slate-100 text-slate-600";
+  const { t } = useLocale();
+  const cls = styles[status] || "bg-slate-50 text-slate-600 ring-slate-200";
   return (
-    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${cls}`}>
-      {status.replace("_", " ")}
+    <span
+      className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[11.5px] font-semibold ring-1 ring-inset ${cls}`}
+    >
+      {translateStatus(t, status)}
     </span>
   );
 }

@@ -2,14 +2,23 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/shared/apis/client";
+import { useAppData } from "@/client/AppStore/AppDataContext";
 import { useAuth } from "@/client/AppStore/AuthContext";
-import type { AttendanceRecord } from "@/shared/types/hrms";
+import { useLocale } from "@/client/AppStore/LocaleContext";
 import { StatusBadge } from "@/shared/components/StatusBadge";
-
-function monthLabel(key: string): string {
-  const [year, month] = key.split("-").map(Number);
-  return new Date(year, month - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
-}
+import { formatMonthKey, formatTime } from "@/shared/helper/format";
+import { Button } from "@/shared/lib/components/Button";
+import { Icon } from "@/shared/lib/components/Icon";
+import {
+  Card,
+  EmptyState,
+  KeyValueGrid,
+  ListCard,
+  PageHeader,
+  SectionHeader,
+  TableCard,
+} from "@/shared/lib/components/Surface";
+import type { AttendanceRecord } from "@/shared/types/hrms";
 
 interface MonthlyStat {
   monthKey: string;
@@ -35,6 +44,8 @@ function summarizeByMonth(records: AttendanceRecord[] | undefined): MonthlyStat[
 
 export default function Attendance() {
   const { user } = useAuth();
+  const { isMobile } = useAppData();
+  const { locale, t } = useLocale();
   const queryClient = useQueryClient();
   const canSeeTeam = user?.role === "manager" || user?.role === "admin";
 
@@ -62,141 +73,245 @@ export default function Attendance() {
 
   const today = new Date().toISOString().slice(0, 10);
   const todayRecord = myAttendance.data?.find((r) => r.date === today);
-
   const monthlyStats = summarizeByMonth(myAttendance.data);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      <PageHeader title={t("attendance.title")} subtitle={t("attendance.subtitle")} />
+
       {user?.employee && (
-        <section>
-          <h1 className="text-xl font-semibold text-slate-800">Attendance</h1>
-
-          <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-left text-slate-500">
-                <tr>
-                  <th className="px-4 py-2">Month</th>
-                  <th className="px-4 py-2">Present</th>
-                  <th className="px-4 py-2">Absent</th>
-                  <th className="px-4 py-2">Leave taken</th>
-                </tr>
-              </thead>
-              <tbody>
-                {monthlyStats.map((m) => (
-                  <tr key={m.monthKey} className="border-t border-slate-100">
-                    <td className="px-4 py-2 font-medium text-slate-700">{monthLabel(m.monthKey)}</td>
-                    <td className="px-4 py-2">{m.present}</td>
-                    <td className="px-4 py-2">{m.absent}</td>
-                    <td className="px-4 py-2">{m.leave}</td>
-                  </tr>
-                ))}
-                {monthlyStats.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="px-4 py-6 text-center text-slate-400">
-                      No attendance records yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="mt-6 flex flex-wrap items-center gap-3">
-            <button
-              onClick={() => punchIn.mutate()}
-              disabled={!!todayRecord?.checkIn || punchIn.isPending}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
-            >
-              Punch in
-            </button>
-            <button
-              onClick={() => punchOut.mutate()}
-              disabled={!todayRecord?.checkIn || !!todayRecord?.checkOut || punchOut.isPending}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
-            >
-              Punch out
-            </button>
-            {todayRecord && (
-              <span className="text-sm text-slate-500">
-                {todayRecord.checkIn && `In: ${new Date(todayRecord.checkIn).toLocaleTimeString()}`}
-                {todayRecord.checkOut && ` · Out: ${new Date(todayRecord.checkOut).toLocaleTimeString()}`}
+        <>
+          {/* Punch controls stay at the top so they're reachable without scrolling. */}
+          <Card>
+            <div className="flex items-center gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
+                <Icon name="clock" size={20} />
               </span>
-            )}
-          </div>
-          {(punchIn.isError || punchOut.isError) && (
-            <p className="mt-2 text-sm text-rose-600">Something went wrong. Please try again.</p>
-          )}
+              <div className="min-w-0 flex-1">
+                <p className="text-[15px] font-semibold text-slate-900">{t("common.today")}</p>
+                <p className="mt-0.5 truncate text-[13px] tabular-nums text-slate-500">
+                  {todayRecord?.checkIn
+                    ? [
+                        t("dashboard.inAt", { time: formatTime(todayRecord.checkIn, locale) }),
+                        todayRecord.checkOut && t("dashboard.outAt", { time: formatTime(todayRecord.checkOut, locale) }),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")
+                    : t("dashboard.notPunched")}
+                </p>
+              </div>
+            </div>
 
-          <div className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-left text-slate-500">
-                <tr>
-                  <th className="px-4 py-2">Date</th>
-                  <th className="px-4 py-2">Check in</th>
-                  <th className="px-4 py-2">Check out</th>
-                  <th className="px-4 py-2">Hours</th>
-                  <th className="px-4 py-2">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {myAttendance.data?.map((r) => (
-                  <tr key={r._id} className="border-t border-slate-100">
-                    <td className="px-4 py-2">{r.date}</td>
-                    <td className="px-4 py-2">{r.checkIn ? new Date(r.checkIn).toLocaleTimeString() : "—"}</td>
-                    <td className="px-4 py-2">{r.checkOut ? new Date(r.checkOut).toLocaleTimeString() : "—"}</td>
-                    <td className="px-4 py-2">{r.hoursWorked ?? "—"}</td>
-                    <td className="px-4 py-2">
-                      <StatusBadge status={r.status} />
-                    </td>
-                  </tr>
+            <div className={`mt-3.5 flex gap-2.5 ${isMobile ? "" : "max-w-md"}`}>
+              <Button
+                onClick={() => punchIn.mutate()}
+                disabled={!!todayRecord?.checkIn || punchIn.isPending}
+                variant="success"
+                icon="check"
+                block
+              >
+                {t("dashboard.punchIn")}
+              </Button>
+              <Button
+                onClick={() => punchOut.mutate()}
+                disabled={!todayRecord?.checkIn || !!todayRecord?.checkOut || punchOut.isPending}
+                icon="logout"
+                block
+              >
+                {t("dashboard.punchOut")}
+              </Button>
+            </div>
+
+            {(punchIn.isError || punchOut.isError) && (
+              <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-[13px] text-rose-700">{t("common.errorRetry")}</p>
+            )}
+          </Card>
+
+          <section>
+            <SectionHeader title={t("attendance.monthlySummary")} icon="trendUp" />
+
+            {isMobile ? (
+              <div className="space-y-2.5">
+                {monthlyStats.map((m) => (
+                  <ListCard key={m.monthKey} title={formatMonthKey(m.monthKey, t)}>
+                    <KeyValueGrid
+                      columns={3}
+                      items={[
+                        {
+                          label: t("attendance.present"),
+                          value: <span className="tabular-nums text-emerald-600">{m.present}</span>,
+                        },
+                        {
+                          label: t("attendance.absent"),
+                          value: <span className="tabular-nums text-rose-600">{m.absent}</span>,
+                        },
+                        {
+                          label: t("attendance.leaveTaken"),
+                          value: <span className="tabular-nums text-amber-600">{m.leave}</span>,
+                        },
+                      ]}
+                    />
+                  </ListCard>
                 ))}
-                {myAttendance.data?.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
-                      No attendance records yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                {monthlyStats.length === 0 && <EmptyState message={t("attendance.noRecords")} icon="clock" />}
+              </div>
+            ) : (
+              <TableCard>
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-left text-slate-500">
+                    <tr>
+                      <th className="px-4 py-2.5 font-semibold">{t("common.month")}</th>
+                      <th className="px-4 py-2.5 font-semibold">{t("attendance.present")}</th>
+                      <th className="px-4 py-2.5 font-semibold">{t("attendance.absent")}</th>
+                      <th className="px-4 py-2.5 font-semibold">{t("attendance.leaveTaken")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {monthlyStats.map((m) => (
+                      <tr key={m.monthKey} className="border-t border-slate-100">
+                        <td className="px-4 py-2.5 font-medium text-slate-700">{formatMonthKey(m.monthKey, t)}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{m.present}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{m.absent}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{m.leave}</td>
+                      </tr>
+                    ))}
+                    {monthlyStats.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-6 text-center text-slate-400">
+                          {t("attendance.noRecords")}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </TableCard>
+            )}
+          </section>
+
+          <section>
+            <SectionHeader title={t("attendance.history")} icon="calendar" />
+
+            {isMobile ? (
+              <div className="space-y-2.5">
+                {myAttendance.data?.map((r) => (
+                  <ListCard
+                    key={r._id}
+                    title={<span className="tabular-nums">{r.date}</span>}
+                    right={<StatusBadge status={r.status} />}
+                  >
+                    <KeyValueGrid
+                      columns={3}
+                      items={[
+                        { label: t("attendance.checkIn"), value: formatTime(r.checkIn, locale) },
+                        { label: t("attendance.checkOut"), value: formatTime(r.checkOut, locale) },
+                        {
+                          label: t("common.hours"),
+                          value: <span className="tabular-nums">{r.hoursWorked ?? t("common.empty")}</span>,
+                        },
+                      ]}
+                    />
+                  </ListCard>
+                ))}
+                {myAttendance.data?.length === 0 && <EmptyState message={t("attendance.noRecords")} icon="calendar" />}
+              </div>
+            ) : (
+              <TableCard>
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-left text-slate-500">
+                    <tr>
+                      <th className="px-4 py-2.5 font-semibold">{t("common.date")}</th>
+                      <th className="px-4 py-2.5 font-semibold">{t("attendance.checkIn")}</th>
+                      <th className="px-4 py-2.5 font-semibold">{t("attendance.checkOut")}</th>
+                      <th className="px-4 py-2.5 font-semibold">{t("common.hours")}</th>
+                      <th className="px-4 py-2.5 font-semibold">{t("common.status")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {myAttendance.data?.map((r) => (
+                      <tr key={r._id} className="border-t border-slate-100">
+                        <td className="px-4 py-2.5 tabular-nums">{r.date}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{formatTime(r.checkIn, locale)}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{formatTime(r.checkOut, locale)}</td>
+                        <td className="px-4 py-2.5 tabular-nums">{r.hoursWorked ?? t("common.empty")}</td>
+                        <td className="px-4 py-2.5">
+                          <StatusBadge status={r.status} />
+                        </td>
+                      </tr>
+                    ))}
+                    {myAttendance.data?.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
+                          {t("attendance.noRecords")}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </TableCard>
+            )}
+          </section>
+        </>
       )}
 
       {canSeeTeam && (
         <section>
-          <h2 className="text-lg font-semibold text-slate-800">Team attendance</h2>
-          <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-left text-slate-500">
-                <tr>
-                  <th className="px-4 py-2">Employee</th>
-                  <th className="px-4 py-2">Date</th>
-                  <th className="px-4 py-2">Status</th>
-                  <th className="px-4 py-2">Hours</th>
-                </tr>
-              </thead>
-              <tbody>
-                {teamAttendance.data?.map((r) => (
-                  <tr key={r._id} className="border-t border-slate-100">
-                    <td className="px-4 py-2">{typeof r.employee === "object" ? r.employee.name : r.employee}</td>
-                    <td className="px-4 py-2">{r.date}</td>
-                    <td className="px-4 py-2">
-                      <StatusBadge status={r.status} />
-                    </td>
-                    <td className="px-4 py-2">{r.hoursWorked ?? "—"}</td>
-                  </tr>
-                ))}
-                {teamAttendance.data?.length === 0 && (
+          <SectionHeader title={t("attendance.teamTitle")} icon="users" />
+
+          {isMobile ? (
+            <div className="space-y-2.5">
+              {teamAttendance.data?.map((r) => (
+                <ListCard
+                  key={r._id}
+                  title={typeof r.employee === "object" ? r.employee.name : r.employee}
+                  subtitle={<span className="tabular-nums">{r.date}</span>}
+                  right={<StatusBadge status={r.status} />}
+                >
+                  <KeyValueGrid
+                    columns={1}
+                    items={[
+                      {
+                        label: t("common.hours"),
+                        value: <span className="tabular-nums">{r.hoursWorked ?? t("common.empty")}</span>,
+                      },
+                    ]}
+                  />
+                </ListCard>
+              ))}
+              {teamAttendance.data?.length === 0 && <EmptyState message={t("attendance.noTeamRecords")} icon="users" />}
+            </div>
+          ) : (
+            <TableCard>
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-left text-slate-500">
                   <tr>
-                    <td colSpan={4} className="px-4 py-6 text-center text-slate-400">
-                      No records yet.
-                    </td>
+                    <th className="px-4 py-2.5 font-semibold">{t("common.employee")}</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("common.date")}</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("common.status")}</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("common.hours")}</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {teamAttendance.data?.map((r) => (
+                    <tr key={r._id} className="border-t border-slate-100">
+                      <td className="px-4 py-2.5">{typeof r.employee === "object" ? r.employee.name : r.employee}</td>
+                      <td className="px-4 py-2.5 tabular-nums">{r.date}</td>
+                      <td className="px-4 py-2.5">
+                        <StatusBadge status={r.status} />
+                      </td>
+                      <td className="px-4 py-2.5 tabular-nums">{r.hoursWorked ?? t("common.empty")}</td>
+                    </tr>
+                  ))}
+                  {teamAttendance.data?.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-6 text-center text-slate-400">
+                        {t("attendance.noTeamRecords")}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </TableCard>
+          )}
         </section>
       )}
     </div>

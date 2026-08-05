@@ -1,9 +1,19 @@
-export function StatCard({ title, value, hint }: { title: string; value: string; hint?: string }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-sm text-slate-500">{title}</p>
-      <p className="mt-1 text-2xl font-semibold text-slate-800">{value}</p>
-      {hint && <p className="mt-1 text-xs text-slate-400">{hint}</p>}
-    </div>
-  );
+import type { IconName } from "@/shared/lib/components/Icon";
+import { MetricTile } from "@/shared/lib/components/Surface";
+
+/** Thin wrapper kept for existing call sites; the visual is `MetricTile`. */
+export function StatCard({
+  title,
+  value,
+  hint,
+  icon,
+  tone,
+}: {
+  title: string;
+  value: string;
+  hint?: string;
+  icon?: IconName;
+  tone?: "default" | "brand";
+}) {
+  return <MetricTile label={title} value={value} hint={hint} icon={icon} tone={tone} />;
 }

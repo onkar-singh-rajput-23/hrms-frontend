@@ -4,14 +4,19 @@ import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/client/AppStore/AuthContext";
+import { useLocale } from "@/client/AppStore/LocaleContext";
+import { LanguageSwitcher } from "@/shared/components/LanguageSwitcher";
+import { translateRole } from "@/shared/i18n";
+import { Button } from "@/shared/lib/components/Button";
+import { Checkbox, FileField, FormError, Input, Select, Textarea } from "@/shared/lib/components/Field";
+import { Card } from "@/shared/lib/components/Surface";
 import { PUBLIC_ROLES, type RegistrationDocument, type Role } from "@/shared/types/hrms";
 
 const ACCEPTED_DOCUMENT_TYPES = ["application/pdf", "image/jpeg", "image/png"] as const;
 const MAX_DOCUMENT_SIZE = 5 * 1024 * 1024;
-const fieldClassName =
-  "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200";
 
-function readDocument(file: File): Promise<RegistrationDocument> {
+/** `readError` is passed in already localised — this helper runs outside the component. */
+function readDocument(file: File, readError: string): Promise<RegistrationDocument> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () =>
@@ -20,13 +25,18 @@ function readDocument(file: File): Promise<RegistrationDocument> {
         mimeType: file.type as RegistrationDocument["mimeType"],
         data: String(reader.result),
       });
-    reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
+    reader.onerror = () => reject(new Error(readError));
     reader.readAsDataURL(file);
   });
 }
 
+function SectionTitle({ children }: { children: string }) {
+  return <h2 className="text-[13px] font-bold uppercase tracking-wide text-slate-400">{children}</h2>;
+}
+
 export default function Register() {
   const { register, user, loading } = useAuth();
+  const { t } = useLocale();
   const router = useRouter();
   const [name, setName] = useState("");
   const [fathersName, setFathersName] = useState("");
@@ -60,12 +70,12 @@ export default function Register() {
     if (!file) return setFile(null);
     if (!ACCEPTED_DOCUMENT_TYPES.includes(file.type as (typeof ACCEPTED_DOCUMENT_TYPES)[number])) {
       event.target.value = "";
-      setError("Documents must be PDF, JPG, or PNG files");
+      setError(t("register.errorDocumentType"));
       return;
     }
     if (file.size > MAX_DOCUMENT_SIZE) {
       event.target.value = "";
-      setError("Each document must be 5 MB or smaller");
+      setError(t("register.errorDocumentSize"));
       return;
     }
     setError(null);
@@ -79,17 +89,21 @@ export default function Register() {
     const normalizedMobileNumber = aadhaarLinkedMobileNumber.replace(/\D/g, "");
     const normalizedPanNumber = panNumber.trim().toUpperCase();
 
-    if (!/^[6-9]\d{9}$/.test(normalizedMobileNumber)) return setError("Enter a valid 10-digit Aadhaar-linked mobile number");
-    if (!/^\d{12}$/.test(normalizedAadhaarNumber)) return setError("Enter a valid 12-digit Aadhaar number");
-    if (!/^[A-Z]{5}\d{4}[A-Z]$/.test(normalizedPanNumber)) return setError("Enter a valid PAN number, for example ABCDE1234F");
-    if (password !== confirmPassword) return setError("Passwords do not match");
-    if (password.length < 6) return setError("Password must be at least 6 characters");
+    if (!/^[6-9]\d{9}$/.test(normalizedMobileNumber)) return setError(t("register.errorMobile"));
+    if (!/^\d{12}$/.test(normalizedAadhaarNumber)) return setError(t("register.errorAadhaar"));
+    if (!/^[A-Z]{5}\d{4}[A-Z]$/.test(normalizedPanNumber)) return setError(t("register.errorPan"));
+    if (password !== confirmPassword) return setError(t("register.errorPasswordMatch"));
+    if (password.length < 6) return setError(t("register.errorPasswordLength"));
 
     setSubmitting(true);
     try {
       const [aadhaarDocument, panDocument] = await Promise.all([
-        aadhaarDocumentFile ? readDocument(aadhaarDocumentFile) : undefined,
-        panDocumentFile ? readDocument(panDocumentFile) : undefined,
+        aadhaarDocumentFile
+          ? readDocument(aadhaarDocumentFile, t("register.errorDocumentRead", { file: aadhaarDocumentFile.name }))
+          : undefined,
+        panDocumentFile
+          ? readDocument(panDocumentFile, t("register.errorDocumentRead", { file: panDocumentFile.name }))
+          : undefined,
       ]);
       await register({
         name: name.trim(), fathersName: fathersName.trim(), temporaryAddress: temporaryAddress.trim(),
@@ -99,116 +113,184 @@ export default function Register() {
       });
       router.push("/dashboard");
     } catch (caughtError: any) {
-      setError(caughtError?.response?.data?.message || caughtError?.message || "Could not create your account");
+      setError(caughtError?.response?.data?.message || caughtError?.message || t("register.errorGeneric"));
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 px-4 py-8 sm:py-12">
-      <div className="mx-auto w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
-        <h1 className="text-2xl font-semibold text-slate-800">Employee registration</h1>
-        <p className="mt-1 text-sm text-slate-500">Complete your personal and identity details. Fields marked with * are required.</p>
+    <div className="min-h-dvh bg-slate-50">
+      <header className="safe-top flex items-center justify-between px-4 py-3.5">
+        <Link href="/" className="text-[17px] font-bold text-slate-900">
+          {t("app.name")}
+        </Link>
+        <LanguageSwitcher />
+      </header>
 
-        <form onSubmit={onSubmit} className="mt-8 space-y-8">
-          <section>
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Personal details</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <TextField label="Full name *" value={name} onChange={setName} autoComplete="name" />
-              <TextField label="Father's name *" value={fathersName} onChange={setFathersName} />
-              <AddressField label="Temporary address *" value={temporaryAddress} onChange={setTemporaryAddress} />
-              <AddressField label="Permanent address *" value={permanentAddress} onChange={setPermanentAddress} disabled={sameAddress} />
-              <label className="flex items-center gap-2 text-sm text-slate-600 sm:col-span-2">
-                <input type="checkbox" checked={sameAddress} onChange={(event) => setSameAddress(event.target.checked)} className="size-4 rounded border-slate-300" />
-                Permanent address is the same as temporary address
-              </label>
-            </div>
-          </section>
+      <div className="mx-auto w-full max-w-3xl px-4 pb-10">
+        <Card className="!p-5 sm:!p-8">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t("register.title")}</h1>
+          <p className="mt-1 text-sm text-slate-500">{t("register.subtitle")}</p>
 
-          <section className="border-t border-slate-200 pt-8">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Identity details</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <label className="block text-sm font-medium text-slate-700">
-                Aadhaar-linked mobile number *
-                <input type="tel" inputMode="numeric" value={aadhaarLinkedMobileNumber}
-                  onChange={(event) => setAadhaarLinkedMobileNumber(event.target.value.replace(/\D/g, "").slice(0, 10))}
-                  required pattern="[6-9][0-9]{9}" maxLength={10} placeholder="10-digit mobile number" autoComplete="tel" className={fieldClassName} />
-              </label>
-              <label className="block text-sm font-medium text-slate-700">
-                Aadhaar number *
-                <input type="text" inputMode="numeric" value={aadhaarNumber}
+          <form onSubmit={onSubmit} className="mt-7 space-y-7">
+            <section>
+              <SectionTitle>{t("register.personalSection")}</SectionTitle>
+              <div className="mt-3.5 grid gap-3.5 sm:grid-cols-2">
+                <Input
+                  label={`${t("register.fullName")} *`}
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  required
+                  autoComplete="name"
+                />
+                <Input
+                  label={`${t("register.fathersName")} *`}
+                  value={fathersName}
+                  onChange={(event) => setFathersName(event.target.value)}
+                  required
+                />
+                <Textarea
+                  label={`${t("register.temporaryAddress")} *`}
+                  value={temporaryAddress}
+                  onChange={(event) => setTemporaryAddress(event.target.value)}
+                  required
+                  wrapperClassName="sm:col-span-2"
+                />
+                <Textarea
+                  label={`${t("register.permanentAddress")} *`}
+                  value={permanentAddress}
+                  onChange={(event) => setPermanentAddress(event.target.value)}
+                  required
+                  disabled={sameAddress}
+                  wrapperClassName="sm:col-span-2"
+                />
+                <Checkbox
+                  label={t("register.sameAddress")}
+                  checked={sameAddress}
+                  onChange={(event) => setSameAddress(event.target.checked)}
+                  className="sm:col-span-2"
+                />
+              </div>
+            </section>
+
+            <section className="border-t border-slate-100 pt-7">
+              <SectionTitle>{t("register.identitySection")}</SectionTitle>
+              <div className="mt-3.5 grid gap-3.5 sm:grid-cols-2">
+                <Input
+                  type="tel"
+                  inputMode="numeric"
+                  label={`${t("register.aadhaarMobile")} *`}
+                  value={aadhaarLinkedMobileNumber}
+                  onChange={(event) =>
+                    setAadhaarLinkedMobileNumber(event.target.value.replace(/\D/g, "").slice(0, 10))
+                  }
+                  required
+                  pattern="[6-9][0-9]{9}"
+                  maxLength={10}
+                  placeholder={t("register.aadhaarMobilePlaceholder")}
+                  autoComplete="tel"
+                />
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  label={`${t("register.aadhaarNumber")} *`}
+                  value={aadhaarNumber}
                   onChange={(event) => setAadhaarNumber(event.target.value.replace(/\D/g, "").slice(0, 12))}
-                  required pattern="[0-9]{12}" maxLength={12} placeholder="12-digit Aadhaar number" className={fieldClassName} />
-              </label>
-              <DocumentField label="Aadhaar document" onChange={(event) => selectDocument(event, setAadhaarDocumentFile)} />
-              <label className="block text-sm font-medium text-slate-700">
-                PAN number *
-                <input type="text" value={panNumber}
-                  onChange={(event) => setPanNumber(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10))}
-                  required pattern="[A-Z]{5}[0-9]{4}[A-Z]" maxLength={10} placeholder="ABCDE1234F" className={`${fieldClassName} uppercase`} />
-              </label>
-              <DocumentField label="PAN document" onChange={(event) => selectDocument(event, setPanDocumentFile)} />
-            </div>
-          </section>
+                  required
+                  pattern="[0-9]{12}"
+                  maxLength={12}
+                  placeholder={t("register.aadhaarNumberPlaceholder")}
+                />
+                <FileField
+                  label={`${t("register.aadhaarDocument")} ${t("common.optional")}`}
+                  hint={t("register.documentHint")}
+                  accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                  onChange={(event) => selectDocument(event, setAadhaarDocumentFile)}
+                />
+                <Input
+                  type="text"
+                  label={`${t("register.panNumber")} *`}
+                  value={panNumber}
+                  onChange={(event) =>
+                    setPanNumber(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10))
+                  }
+                  required
+                  pattern="[A-Z]{5}[0-9]{4}[A-Z]"
+                  maxLength={10}
+                  placeholder="ABCDE1234F"
+                  className="uppercase"
+                />
+                <FileField
+                  label={`${t("register.panDocument")} ${t("common.optional")}`}
+                  hint={t("register.documentHint")}
+                  accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                  onChange={(event) => selectDocument(event, setPanDocumentFile)}
+                />
+              </div>
+            </section>
 
-          <section className="border-t border-slate-200 pt-8">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Account details</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <label className="block text-sm font-medium text-slate-700 sm:col-span-2">
-                Email address *
-                <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" className={fieldClassName} />
-              </label>
-              <label className="block text-sm font-medium text-slate-700">
-                Password *
-                <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={6} autoComplete="new-password" className={fieldClassName} />
-              </label>
-              <label className="block text-sm font-medium text-slate-700">
-                Confirm password *
-                <input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required minLength={6} autoComplete="new-password" className={fieldClassName} />
-              </label>
-              <label className="block text-sm font-medium text-slate-700 sm:col-span-2">
-                Role *
-                <select value={role} onChange={(event) => setRole(event.target.value as Role)} className={fieldClassName}>
-                  {PUBLIC_ROLES.map((publicRole) => <option key={publicRole.value} value={publicRole.value}>{publicRole.label}</option>)}
-                </select>
-                <span className="mt-1 block text-xs font-normal text-slate-400">An HR admin can change this later.</span>
-              </label>
-            </div>
-          </section>
+            <section className="border-t border-slate-100 pt-7">
+              <SectionTitle>{t("register.accountSection")}</SectionTitle>
+              <div className="mt-3.5 grid gap-3.5 sm:grid-cols-2">
+                <Input
+                  type="email"
+                  label={`${t("register.emailAddress")} *`}
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  required
+                  autoComplete="email"
+                  wrapperClassName="sm:col-span-2"
+                />
+                <Input
+                  type="password"
+                  label={`${t("auth.password")} *`}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
+                  minLength={6}
+                  autoComplete="new-password"
+                />
+                <Input
+                  type="password"
+                  label={`${t("register.confirmPassword")} *`}
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  required
+                  minLength={6}
+                  autoComplete="new-password"
+                />
+                <Select
+                  label={`${t("common.role")} *`}
+                  value={role}
+                  onChange={(event) => setRole(event.target.value as Role)}
+                  hint={t("register.roleHint")}
+                  wrapperClassName="sm:col-span-2"
+                >
+                  {PUBLIC_ROLES.map((publicRole) => (
+                    <option key={publicRole.value} value={publicRole.value}>
+                      {translateRole(t, publicRole.value)}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </section>
 
-          {error && <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
-          <button type="submit" disabled={submitting}
-            className="w-full rounded-lg bg-slate-900 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60">
-            {submitting ? "Creating account…" : "Register"}
-          </button>
-        </form>
+            {error && <FormError message={error} />}
 
-        <p className="mt-6 text-center text-sm text-slate-500">Already have an account?{" "}
-          <Link href="/login" className="font-medium text-slate-900 underline">Log in</Link>
-        </p>
+            <Button type="submit" disabled={submitting} size="lg" block>
+              {submitting ? t("register.submitting") : t("register.submit")}
+            </Button>
+          </form>
+
+          <p className="mt-5 text-center text-sm text-slate-500">
+            {t("auth.haveAccount")}{" "}
+            <Link href="/login" className="font-semibold text-brand-700 underline">
+              {t("auth.logIn")}
+            </Link>
+          </p>
+        </Card>
       </div>
     </div>
   );
-}
-
-function TextField({ label, value, onChange, autoComplete }: { label: string; value: string; onChange: (value: string) => void; autoComplete?: string }) {
-  return <label className="block text-sm font-medium text-slate-700">{label}
-    <input type="text" value={value} onChange={(event) => onChange(event.target.value)} required autoComplete={autoComplete} className={fieldClassName} />
-  </label>;
-}
-
-function AddressField({ label, value, onChange, disabled = false }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean }) {
-  return <label className="block text-sm font-medium text-slate-700 sm:col-span-2">{label}
-    <textarea value={value} onChange={(event) => onChange(event.target.value)} required disabled={disabled} rows={3}
-      className={`${fieldClassName} resize-y disabled:bg-slate-100`} />
-  </label>;
-}
-
-function DocumentField({ label, onChange }: { label: string; onChange: (event: ChangeEvent<HTMLInputElement>) => void }) {
-  return <label className="block text-sm font-medium text-slate-700">{label} <span className="font-normal text-slate-400">(optional)</span>
-    <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={onChange}
-      className="mt-1 block w-full text-sm text-slate-500 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700" />
-    <span className="mt-1 block text-xs font-normal text-slate-400">PDF, JPG, or PNG up to 5 MB</span>
-  </label>;
 }
