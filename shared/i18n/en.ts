@@ -259,6 +259,7 @@ export const en = {
   "employees.add": "Add employee",
   "employees.code": "Code",
   "employees.employeeCode": "Employee code",
+  "employees.codeAutoHint": "The employee code is generated automatically.",
   "employees.fullName": "Full name",
   "employees.department": "Department",
   "employees.selectDepartment": "Select department",

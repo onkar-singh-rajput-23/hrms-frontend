@@ -255,6 +255,7 @@ export const hi: Record<TranslationKey, string> = {
   "employees.add": "कर्मचारी जोड़ें",
   "employees.code": "कोड",
   "employees.employeeCode": "कर्मचारी कोड",
+  "employees.codeAutoHint": "कर्मचारी कोड अपने आप बन जाता है।",
   "employees.fullName": "पूरा नाम",
   "employees.department": "विभाग",
   "employees.selectDepartment": "विभाग चुनें",

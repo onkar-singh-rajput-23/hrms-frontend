@@ -37,8 +37,8 @@ export default function Employees() {
     queryFn: async () => (await api.get<Department[]>("/departments")).data,
   });
 
+  // employeeCode is deliberately absent: the server generates the next free code.
   const [form, setForm] = useState({
-    employeeCode: "",
     name: "",
     email: "",
     department: "",
@@ -52,7 +52,7 @@ export default function Employees() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["employees"] });
       setShowForm(false);
-      setForm({ employeeCode: "", name: "", email: "", department: "", designation: "", dateOfJoining: "", basicSalary: 0 });
+      setForm({ name: "", email: "", department: "", designation: "", dateOfJoining: "", basicSalary: 0 });
     },
     onError: (err: any) => setFormError(err?.response?.data?.message || t("employees.couldNotCreate")),
   });
@@ -83,12 +83,7 @@ export default function Employees() {
       {showForm && user?.role === "admin" && (
         <Card>
           <form onSubmit={onSubmit} className="grid gap-3 sm:grid-cols-2">
-            <Input
-              label={t("employees.employeeCode")}
-              value={form.employeeCode}
-              onChange={(e) => setForm({ ...form, employeeCode: e.target.value })}
-              required
-            />
+            <p className="text-[12.5px] text-slate-500 sm:col-span-2">{t("employees.codeAutoHint")}</p>
             <Input
               label={t("employees.fullName")}
               value={form.name}
