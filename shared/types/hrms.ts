@@ -1,13 +1,23 @@
 export type Role = "employee" | "manager" | "admin";
 
-// Public registration creates an employee. Managers and admins are assigned by an admin.
-export const PUBLIC_ROLES: { value: Role; label: string }[] = [{ value: "employee", label: "Employee" }];
+// Public registration allows employee or manager. Admin is only ever assigned by an admin.
+export const PUBLIC_ROLES: { value: Role; label: string }[] = [
+  { value: "employee", label: "Employee" },
+  { value: "manager", label: "Manager" },
+];
 
+// Listed explicitly rather than spreading PUBLIC_ROLES, which would repeat Manager.
 export const ALL_ROLES: { value: Role; label: string }[] = [
-  ...PUBLIC_ROLES,
+  { value: "employee", label: "Employee" },
   { value: "manager", label: "Manager" },
   { value: "admin", label: "Admin" },
 ];
+
+/** One entry of GET /auth/managers — `id` is the manager's Employee id. */
+export interface SelectableManager {
+  id: string;
+  name: string;
+}
 
 export interface RegistrationDocument {
   fileName: string;
@@ -28,6 +38,8 @@ export interface RegistrationDetails {
   email: string;
   password: string;
   role: Role;
+  /** Employee id of the chosen reporting manager. Required for employees when managers exist. */
+  reportingManagerId?: string;
 }
 
 export interface CurrentUser {

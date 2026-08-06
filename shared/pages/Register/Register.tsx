@@ -10,7 +10,13 @@ import { translateRole } from "@/shared/i18n";
 import { Button } from "@/shared/lib/components/Button";
 import { Checkbox, FileField, FormError, Input, Select, Textarea } from "@/shared/lib/components/Field";
 import { Card } from "@/shared/lib/components/Surface";
-import { PUBLIC_ROLES, type RegistrationDocument, type Role } from "@/shared/types/hrms";
+import { api } from "@/shared/apis/client";
+import {
+  PUBLIC_ROLES,
+  type RegistrationDocument,
+  type Role,
+  type SelectableManager,
+} from "@/shared/types/hrms";
 
 const ACCEPTED_DOCUMENT_TYPES = ["application/pdf", "image/jpeg", "image/png"] as const;
 const MAX_DOCUMENT_SIZE = 5 * 1024 * 1024;
@@ -51,13 +57,31 @@ export default function Register() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [role, setRole] = useState<Role>("manager");
+  const [role, setRole] = useState<Role>("employee");
+  const [reportingManagerId, setReportingManagerId] = useState("");
+  const [managers, setManagers] = useState<SelectableManager[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!loading && user) router.replace("/dashboard");
   }, [loading, router, user]);
+
+  // Public endpoint — the picker has to be filled before the visitor has a token.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get<SelectableManager[]>("/auth/managers")
+      .then(({ data }) => {
+        if (!cancelled) setManagers(data);
+      })
+      .catch(() => {
+        /* leave the list empty; the field then explains that HR will assign one */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (sameAddress) setPermanentAddress(temporaryAddress);
@@ -94,6 +118,10 @@ export default function Register() {
     if (!/^[A-Z]{5}\d{4}[A-Z]$/.test(normalizedPanNumber)) return setError(t("register.errorPan"));
     if (password !== confirmPassword) return setError(t("register.errorPasswordMatch"));
     if (password.length < 6) return setError(t("register.errorPasswordLength"));
+    // Mirrors the server rule: an employee must pick a manager whenever any manager exists.
+    if (role === "employee" && managers.length > 0 && !reportingManagerId) {
+      return setError(t("register.errorManagerRequired"));
+    }
 
     setSubmitting(true);
     try {
@@ -110,6 +138,7 @@ export default function Register() {
         permanentAddress: permanentAddress.trim(), aadhaarLinkedMobileNumber: normalizedMobileNumber,
         aadhaarNumber: normalizedAadhaarNumber, aadhaarDocument, panNumber: normalizedPanNumber,
         panDocument, email: email.trim().toLowerCase(), password, role,
+        reportingManagerId: reportingManagerId || undefined,
       });
       router.push("/dashboard");
     } catch (caughtError: any) {
@@ -270,6 +299,35 @@ export default function Register() {
                   {PUBLIC_ROLES.map((publicRole) => (
                     <option key={publicRole.value} value={publicRole.value}>
                       {translateRole(t, publicRole.value)}
+                    </option>
+                  ))}
+                </Select>
+
+                {/* Employees must name a manager; a manager may leave it for HR to assign. */}
+                <Select
+                  label={`${t("register.reportingManager")}${role === "employee" && managers.length > 0 ? " *" : ""}`}
+                  value={reportingManagerId}
+                  onChange={(event) => setReportingManagerId(event.target.value)}
+                  disabled={managers.length === 0}
+                  hint={
+                    managers.length === 0
+                      ? t("register.noManagersAvailable")
+                      : role === "employee"
+                        ? t("register.managerHint")
+                        : t("register.managerHintForManager")
+                  }
+                  wrapperClassName="sm:col-span-2"
+                >
+                  <option value="">
+                    {managers.length === 0
+                      ? t("register.noManagerOption")
+                      : role === "employee"
+                        ? t("register.selectManager")
+                        : t("register.noManagerOption")}
+                  </option>
+                  {managers.map((manager) => (
+                    <option key={manager.id} value={manager.id}>
+                      {manager.name}
                     </option>
                   ))}
                 </Select>
